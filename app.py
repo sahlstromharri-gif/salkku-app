@@ -16,10 +16,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials.json')
 TOKEN_PATH = os.path.join(BASE_DIR, 'token.pickle')
 
-# Sivun asetukset (Vaalea teema)
+# Sivun asetukset (Vaalea teema ja seepra-ikoni selaimen välilehdelle)
 st.set_page_config(
-    page_title="Salkku-App",
-    page_icon="📊",
+    page_title="Zebran Salkku",
+    page_icon="🦓",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -55,6 +55,12 @@ st.markdown("""
         color: #9a6700;
         font-weight: 600;
     }
+    .header-title {
+        font-size: 42px;
+        font-weight: 700;
+        color: #1f2328;
+        padding-top: 25px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -68,8 +74,17 @@ WATCHLIST = {
 
 all_symbols = [symbol for category in WATCHLIST.values() for symbol in category]
 
-# Pääotsikko
-st.title("📊 Oma Salkku-App")
+# Kuva ja otsikko vierekkäin sarakkeilla
+col_img, col_txt = st.columns([1, 10])
+
+with col_img:
+    if os.path.exists(os.path.join(BASE_DIR, "Zebra.png")):
+        st.image(os.path.join(BASE_DIR, "Zebra.png"), width=120)
+
+with col_txt:
+    st.markdown('<div class="header-title">Zebran Salkku</div>', unsafe_allow_html=True)
+
+st.markdown("<br>", unsafe_allow_html=True)
 
 # Luodaan kolme välilehteä
 tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurssit & Analyytikot", "📊 Tekniset Indikaattorit"])
@@ -445,7 +460,7 @@ with tab_tech:
 
                 st.markdown("---")
 
-                # 1. KYNTTILÄKAAVIO & LIUKUVAT KESKIARVOT (Vaalea teema: template="plotly_white")
+                # 1. KYNTTILÄKAAVIO & LIUKUVAT KESKIARVOT
                 st.subheader(f"1. Kynttiläkaavio & Liukuvat keskiarvot: {tech_stock}")
                 fig_candlestick = go.Figure(data=[
                     go.Candlestick(
@@ -506,7 +521,7 @@ with tab_tech:
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 6.2 - Vaalea teema puhelinkäyttöön.")
+    st.write("Versio 6.4 - Zebran Salkku.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
