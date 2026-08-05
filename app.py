@@ -16,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials.json')
 TOKEN_PATH = os.path.join(BASE_DIR, 'token.pickle')
 
-# Sivun asetukset
+# Sivun asetukset (Vaalea teema)
 st.set_page_config(
     page_title="Salkku-App",
     page_icon="📊",
@@ -24,34 +24,35 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Tyylittelyä
+# Selkeä vaalea tyylittely mobiilille ja työpöydälle
 st.markdown("""
     <style>
     .stMain {
-        background-color: #0e1117;
+        background-color: #f8f9fa;
     }
     .news-card {
         padding: 15px;
         border-radius: 8px;
-        border: 1px solid #30363d;
-        background-color: #161b22;
+        border: 1px solid #d0d7de;
+        background-color: #ffffff;
         margin-bottom: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
     }
     .news-title {
         font-size: 16px;
         font-weight: 600;
-        color: #58a6ff;
+        color: #0969da;
         text-decoration: none;
     }
     .news-meta {
         font-size: 12px;
-        color: #8b949e;
+        color: #57606a;
         margin-top: 5px;
     }
     .news-date {
         float: right;
         font-size: 12px;
-        color: #e3b341;
+        color: #9a6700;
         font-weight: 600;
     }
     </style>
@@ -92,7 +93,6 @@ with tab_news:
     def fetch_all_news(symbols):
         news_list = []
         
-        # 1. Haetaan Yahoo Finance -uutiset
         for symbol in symbols:
             try:
                 ticker = yf.Ticker(symbol)
@@ -128,7 +128,6 @@ with tab_news:
             except Exception:
                 continue
 
-        # 2. Haetaan kotimaisia uutisia Google News RSS kautta
         search_terms = {
             "CANATU.HE": "Canatu",
             "NOKIA.HE": "Nokia",
@@ -164,7 +163,6 @@ with tab_news:
             except Exception:
                 continue
 
-        # 3. Haetaan Gmailista Nordnetin Aamukirje
         SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
         creds = None
         
@@ -447,7 +445,7 @@ with tab_tech:
 
                 st.markdown("---")
 
-                # 1. KYNTTILÄKAAVIO & LIUKUVAT KESKIARVOT
+                # 1. KYNTTILÄKAAVIO & LIUKUVAT KESKIARVOT (Vaalea teema: template="plotly_white")
                 st.subheader(f"1. Kynttiläkaavio & Liukuvat keskiarvot: {tech_stock}")
                 fig_candlestick = go.Figure(data=[
                     go.Candlestick(
@@ -458,46 +456,46 @@ with tab_tech:
                     go.Scatter(x=df.index, y=df['SMA 50'], line=dict(color='red', width=1.5), name="SMA 50"),
                     go.Scatter(x=df.index, y=df['SMA 200'], line=dict(color='dodgerblue', width=1.5), name="SMA 200")
                 ])
-                fig_candlestick.update_layout(template="plotly_dark", height=450, xaxis_rangeslider_visible=False, margin=dict(l=10, r=10, t=10, b=10))
+                fig_candlestick.update_layout(template="plotly_white", height=450, xaxis_rangeslider_visible=False, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_candlestick, use_container_width=True)
 
                 # 2. KAUPANKÄYNTIVOLYYMI
                 st.subheader("2. Kaupankäyntivolyymi")
                 fig_vol = go.Figure(data=[
-                    go.Bar(x=df.index, y=df['Volume'], marker_color='slategray', name="Volyymi")
+                    go.Bar(x=df.index, y=df['Volume'], marker_color='dimgray', name="Volyymi")
                 ])
-                fig_vol.update_layout(template="plotly_dark", height=250, margin=dict(l=10, r=10, t=10, b=10))
+                fig_vol.update_layout(template="plotly_white", height=250, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_vol, use_container_width=True)
 
                 # 3. BOLLINGERIN NAUHAT
                 st.subheader("3. Bollingerin nauhat (20 pvl, 2σ)")
                 fig_bb = go.Figure(data=[
                     go.Scatter(x=df.index, y=df['Bollinger Ylä'], line=dict(color='gray', width=1, dash='dash'), name="Yläreuna"),
-                    go.Scatter(x=df.index, y=df['Bollinger Keskiarvo'], line=dict(color='orange', width=1), name="Keskiarvo (SMA 20)"),
-                    go.Scatter(x=df.index, y=df['Bollinger Ala'], line=dict(color='gray', width=1, dash='dash'), name="Alareuna", fill='tonexty', fillcolor='rgba(255,165,0,0.05)'),
-                    go.Scatter(x=df.index, y=df['Close'], line=dict(color='white', width=1.5), name="Kurssi")
+                    go.Scatter(x=df.index, y=df['Bollinger Keskiarvo'], line=dict(color='darkorange', width=1), name="Keskiarvo (SMA 20)"),
+                    go.Scatter(x=df.index, y=df['Bollinger Ala'], line=dict(color='gray', width=1, dash='dash'), name="Alareuna", fill='tonexty', fillcolor='rgba(255,165,0,0.08)'),
+                    go.Scatter(x=df.index, y=df['Close'], line=dict(color='black', width=1.5), name="Kurssi")
                 ])
-                fig_bb.update_layout(template="plotly_dark", height=350, margin=dict(l=10, r=10, t=10, b=10))
+                fig_bb.update_layout(template="plotly_white", height=350, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_bb, use_container_width=True)
 
                 # 4. MACD
                 st.subheader("4. MACD (Momentti)")
                 fig_macd = go.Figure(data=[
-                    go.Bar(x=df.index, y=df['MACD Hist'], marker_color='teal', name="MACD Histogrammi"),
-                    go.Scatter(x=df.index, y=df['MACD'], line=dict(color='cyan', width=1.5), name="MACD Linja"),
-                    go.Scatter(x=df.index, y=df['MACD Signal'], line=dict(color='magenta', width=1.5), name="Signaalilinja")
+                    go.Bar(x=df.index, y=df['MACD Hist'], marker_color='cadetblue', name="MACD Histogrammi"),
+                    go.Scatter(x=df.index, y=df['MACD'], line=dict(color='blue', width=1.5), name="MACD Linja"),
+                    go.Scatter(x=df.index, y=df['MACD Signal'], line=dict(color='deeppink', width=1.5), name="Signaalilinja")
                 ])
-                fig_macd.update_layout(template="plotly_dark", height=300, margin=dict(l=10, r=10, t=10, b=10))
+                fig_macd.update_layout(template="plotly_white", height=300, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_macd, use_container_width=True)
 
-                # 5. RSI (Väri vaihdettu tummansiniseksi/kirkkaaksi siniseksi 'royalblue')
+                # 5. RSI
                 st.subheader("5. RSI (14) - Yliostettu / Ylimyyty")
                 fig_rsi = go.Figure(data=[
                     go.Scatter(x=df.index, y=df['RSI'], line=dict(color='royalblue', width=2), name="RSI"),
                     go.Scatter(x=df.index, y=[70]*len(df), line=dict(color='red', width=1, dash='dot'), name="Yliostettu (70)"),
                     go.Scatter(x=df.index, y=[30]*len(df), line=dict(color='green', width=1, dash='dot'), name="Ylimyyty (30)")
                 ])
-                fig_rsi.update_layout(template="plotly_dark", height=300, yaxis=dict(range=[0, 100]), margin=dict(l=10, r=10, t=10, b=10))
+                fig_rsi.update_layout(template="plotly_white", height=300, yaxis=dict(range=[0, 100]), margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
             else:
@@ -508,7 +506,7 @@ with tab_tech:
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 6.1 - RSI-viivan väri päivitetty.")
+    st.write("Versio 6.2 - Vaalea teema puhelinkäyttöön.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
