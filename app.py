@@ -16,7 +16,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials.json')
 TOKEN_PATH = os.path.join(BASE_DIR, 'token.pickle')
 
-# Sivun asetukset (Vaalea teema ja seepra-ikoni selaimen välilehdelle)
+# Sivun asetukset (Vaalea teema ja zebra-ikoni)
 st.set_page_config(
     page_title="Zebran Salkku",
     page_icon="🦓",
@@ -55,12 +55,6 @@ st.markdown("""
         color: #9a6700;
         font-weight: 600;
     }
-    .header-title {
-        font-size: 42px;
-        font-weight: 700;
-        color: #1f2328;
-        padding-top: 25px;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -74,17 +68,15 @@ WATCHLIST = {
 
 all_symbols = [symbol for category in WATCHLIST.values() for symbol in category]
 
-# Kuva ja otsikko vierekkäin sarakkeilla
-col_img, col_txt = st.columns([1, 10])
+# Kuva ja otsikko vierekkäin sarakkeilla (kuva vasemmalla, otsikko oikealla)
+col_img, col_title = st.columns([1, 8])
 
 with col_img:
     if os.path.exists(os.path.join(BASE_DIR, "Zebra.png")):
         st.image(os.path.join(BASE_DIR, "Zebra.png"), width=120)
 
-with col_txt:
-    st.markdown('<div class="header-title">Zebran Salkku</div>', unsafe_allow_html=True)
-
-st.markdown("<br>", unsafe_allow_html=True)
+with col_title:
+    st.markdown("<h1 style='padding-top: 25px;'>Zebran Salkku</h1>", unsafe_allow_html=True)
 
 # Luodaan kolme välilehteä
 tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurssit & Analyytikot", "📊 Tekniset Indikaattorit"])
@@ -315,7 +307,6 @@ with tab_charts:
                 st.line_chart(perf_df)
 
                 summary_data = []
-                upgrade_records = []
 
                 for symbol in chart_stocks:
                     if symbol in price_df.columns:
@@ -325,64 +316,20 @@ with tab_charts:
                             start_price = float(series.iloc[0])
                             change_pct = ((latest_price / start_price) - 1) * 100
                             
-                            currency = "€" if ".HE" in symbol else "$"
-                            
-                            t = yf.Ticker(symbol)
-                            rec_summary = "Ei saatavilla"
-                            target_mean = "Ei saatavilla"
-                            
-                            try:
-                                recs = t.recommendations
-                                if recs is not None and not recs.empty:
-                                    latest_rec = recs.iloc[0]
-                                    sb = latest_rec.get('strongBuy', 0)
-                                    b = latest_rec.get('buy', 0)
-                                    h = latest_rec.get('hold', 0)
-                                    s = latest_rec.get('sell', 0)
-                                    ss = latest_rec.get('strongSell', 0)
-                                    rec_summary = f"Osta: {b+sb} | Pidä: {h} | Myy: {s+ss}"
-                            except Exception:
-                                pass
-
-                            try:
-                                targets = t.analyst_price_targets
-                                if targets and 'mean' in targets:
-                                    target_mean = f"{round(targets['mean'], 2)} {currency}"
-                            except Exception:
-                                pass
+                            currency = "€" in symbol or ".HE" in symbol and "€" or "$"
+                            if ".HE" in symbol:
+                                currency = "€"
 
                             summary_data.append({
                                 "Osake": symbol,
                                 f"Kurssi ({currency})": round(latest_price, 2),
-                                f"Muutos %": round(change_pct, 2),
-                                "Analyytikkojen suositukset": rec_summary,
-                                "Tavoitehinta (keskiarvo)": target_mean
+                                "Muutos %": round(change_pct, 2)
                             })
-
-                            try:
-                                upgrades_df = t.upgrades_downgrades
-                                if upgrades_df is not None and not upgrades_df.empty:
-                                    upgrades_df = upgrades_df.reset_index().head(5)
-                                    for _, u_row in upgrades_df.iterrows():
-                                        record = {"Osake": symbol}
-                                        for col in upgrades_df.columns:
-                                            val = u_row[col]
-                                            if "date" in str(col).lower() or isinstance(val, (datetime, pd.Timestamp)):
-                                                val = str(val)[:10]
-                                            record[str(col)] = val
-                                        upgrade_records.append(record)
-                            except Exception:
-                                pass
 
                 if summary_data:
                     summary_df = pd.DataFrame(summary_data)
-                    st.markdown("### 📋 Yhteenveto & Analyytikkojen suositukset")
+                    st.markdown("### 📋 Yhteenveto & Kurssikehitys")
                     st.dataframe(summary_df, use_container_width=True, hide_index=True)
-
-                if upgrade_records:
-                    st.markdown("### 🔔 Analyytikkopäivitykset (Upgrades / Downgrades)")
-                    upgrades_table_df = pd.DataFrame(upgrade_records)
-                    st.dataframe(upgrades_table_df, use_container_width=True, hide_index=True)
 
             else:
                 st.warning("Valitulla aikajaksolla ei löytynyt riittävästi yhteisiä hintatietoja.")
@@ -521,7 +468,7 @@ with tab_tech:
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 6.4 - Zebran Salkku.")
+    st.write("Versio 6.5 - Zebran Salkku.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
