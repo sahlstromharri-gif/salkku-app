@@ -316,19 +316,32 @@ with tab_charts:
                             start_price = float(series.iloc[0])
                             change_pct = ((latest_price / start_price) - 1) * 100
                             
-                            currency = "€" in symbol or ".HE" in symbol and "€" or "$"
-                            if ".HE" in symbol:
-                                currency = "€"
+                            currency = "€" if ".HE" in symbol else "$"
+                            
+                            t = yf.Ticker(symbol)
+                            rec_summary = "Ei saatavilla"
+                            target_mean = "Ei saatavilla"
+                            
+                            try:
+                                info = t.info
+                                if 'targetMeanPrice' in info and info['targetMeanPrice']:
+                                    target_mean = f"{round(info['targetMeanPrice'], 2)} {currency}"
+                                if 'recommendationKey' in info and info['recommendationKey']:
+                                    rec_summary = info['recommendationKey'].upper()
+                            except Exception:
+                                pass
 
                             summary_data.append({
                                 "Osake": symbol,
                                 f"Kurssi ({currency})": round(latest_price, 2),
-                                "Muutos %": round(change_pct, 2)
+                                "Muutos %": round(change_pct, 2),
+                                "Analyytikkojen suositus": rec_summary,
+                                "Tavoitehinta (keskiarvo)": target_mean
                             })
 
                 if summary_data:
                     summary_df = pd.DataFrame(summary_data)
-                    st.markdown("### 📋 Yhteenveto & Kurssikehitys")
+                    st.markdown("### 📋 Yhteenveto & Analyytikkojen tiedot")
                     st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
             else:
@@ -468,7 +481,7 @@ with tab_tech:
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 6.5 - Zebran Salkku.")
+    st.write("Versio 6.6 - Zebran Salkku korjatuilla analyytikkotiedoilla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
