@@ -352,7 +352,7 @@ with tab_charts:
 # VÄLILEHTI 3: TEKNISET INDIKAATTORIT & GEMINI-PAKETTI
 # ==========================================
 with tab_tech:
-    st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot, Indikaattorit & Trendit**")
+    st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot, Indikaattorit & Vuositason Trendit**")
     st.markdown("Kaikki keskeiset indikaattorit, tuki-/vastustasot sekä suora leikepöytäkopiointi Gemiä varten.")
 
     tech_stock = st.selectbox("Valitse osake tekniseen analyysiin:", options=all_symbols, key="tech_stock_select")
@@ -405,10 +405,10 @@ with tab_tech:
 
                 df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
 
-                # Poimitaan viimeiset 90 pörssipäivää taulukkomuotoon Gemille
-                df_90d = df_full.tail(90).copy()
+                # Poimitaan viimeinen vuosi (365 kalenteripäivää / n. 252 pörssipäivää) taulukkomuotoon Gemille
+                df_year_data = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
                 daily_data_lines = []
-                for idx, row in df_90d.iterrows():
+                for idx, row in df_year_data.iterrows():
                     date_str = idx.strftime('%Y-%m-%d')
                     c_val = round(float(row['Close']), 2)
                     sma50_val = round(float(row['SMA 50']), 2) if not pd.isna(row['SMA 50']) else "N/A"
@@ -423,7 +423,7 @@ with tab_tech:
 
                 latest_price = float(df_full['Close'].iloc[-1])
                 latest_rsi = float(df_full['RSI'].iloc[-1]) if not pd.isna(df_full['RSI'].iloc[-1]) else 50.0
-                latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc[-1]) else latest_price
+                latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc$-1) else latest_price
 
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
@@ -438,7 +438,7 @@ with tab_tech:
                 st.markdown("---")
 
                 # ==========================================
-                # LAAJA GEMINI-PROMPTI JA SUORA KOPIOINTINAPPI (JS)
+                # LAAJA GEMINI-PROMPTI (VUOSIDATA + 90 PVL PÄÄPAINO)
                 # ==========================================
                 st.markdown("### 🤖 Kopioi laaja teknis-fundamentaalinen analyysipaketti suoraan leikepöydälle")
 
@@ -446,9 +446,8 @@ with tab_tech:
 
 Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilanteen, analyytikkojen konsensuksen ja tavoitehinnat. Vastaa suomeksi ja rakenna vastauksestasi selkeästi jäsennelty, kattava raportti seuraavien osa-alueiden pohjalta:
 
-1. TEKNINEN TRENDI JA MOMENTTI (Päivädata viimeisiltä 90 pörssipäivältä):
-- Analysoi alla olevan 90 pörssipäivän historiadatan perusteella, miten lyhyen (SMA 50) ja pitkän (SMA 200) aikavälin trendit, RSI sekä MACD (MACD-linja vs. signaalilinja) ovat kehittyneet.
-- Tunnista mahdolliset käännekohdat, ylikuumenemiset, pohjanmuodostukset tai divergenssit.
+1. TEKNINEN TRENDI JA MOMENTTI (Päivädata viimeiseltä vuodelta, pääpaino viimeisissä 90 pörssipäivässä):
+- Huom: Alla on data koko viimeisen vuoden ajalta. Käytä vuositason dataa ison kuvan havaitsemiseen (esim. merkittävät vuositason huiput/pohjat, pitkän aikavälin tukitasot ja vastustasot). Tee kuitenkin varsinainen syvällinen ja yksityiskohtainen momentti-, trendi- ja käännekohta-analyysi (SMA 50, SMA 200, RSI, MACD-linja vs. signaalilinja) **viimeisen 90 pörssipäivän** kehityksen pohjalta.
 - Huomioi nykykurssin sijainti suhteessa 1 vuoden tuki- ({support_level} {currency}) ja vastustasoihin ({resistance_level} {currency}).
 
 2. ANALYYTIKOIDEN KONSENSUS JA MUUTOKSET (Viimeiset 90 päivää):
@@ -460,9 +459,9 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
 - Millainen on osakkeen nykyinen riski/tuotto-suhde (Risk/Reward) sijoittajan näkökulmasta?
 - Anna lopuksi selkeä strateginen näkemys: onko kyseessä kyseisen syklin mukaan tarkkailtava, ostettava vai varovaisuuteen kehoittava kohde.
 
---- 90 PÖRSSIPÄIVÄN HISTORIADATA ({tech_stock}) ---
+--- 1 VUODEN HISTORIADATA (Pvm | Kurssi | SMA50 | SMA200 | RSI | MACD-linja | MACD-signaali) ---
 {daily_data_text}
--------------------------------------------------------"""
+--------------------------------------------------------------------------------------------------"""
 
                 # Toteutetaan suora leikepöytäkopiointi HTML/JS-painikkeella
                 escaped_text = gemini_prompt_text.replace("`", "\\`").replace("$", "\\$")
@@ -479,7 +478,7 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
                         font-weight: 600;
                         cursor: pointer;
                         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                    ">📋 Kopioi viimeisen 90 päivän kehitys</button>
+                    ">📋 Kopioi viimeisen vuoden kehitys (pääpaino 90pv)</button>
                     <span id="copy-status" style="margin-left: 12px; font-size: 14px; color: #1f883d; font-weight: 600; display: none;">✓ Kopioitu leikepöydälle!</span>
                 </div>
                 <script>
@@ -594,7 +593,7 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 7.6 - Zebran Salkku suoralla leikepöytäkopioinnilla.")
+    st.write("Versio 7.7 - Zebran Salkku vuositason historiadata-kopioinnilla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
