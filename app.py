@@ -10,6 +10,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+import streamlit.components.v1 as components
 
 # Määritetään kansionpolku, jossa app.py ja credentials.json sijaitsevat
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -352,7 +353,7 @@ with tab_charts:
 # ==========================================
 with tab_tech:
     st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot, Indikaattorit & Trendit**")
-    st.markdown("Kaikki keskeiset indikaattorit, tuki-/vastustasot sekä pörssipäivädata Gemiä varten.")
+    st.markdown("Kaikki keskeiset indikaattorit, tuki-/vastustasot sekä suora leikepöytäkopiointi Gemiä varten.")
 
     tech_stock = st.selectbox("Valitse osake tekniseen analyysiin:", options=all_symbols, key="tech_stock_select")
 
@@ -404,7 +405,7 @@ with tab_tech:
 
                 df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
 
-                # Poimitaan viimeiset 90 pörssipäivää taulukkomuotoon Gemille (mukaan lukien SMA200, MACD-linja ja Signaalilinja)
+                # Poimitaan viimeiset 90 pörssipäivää taulukkomuotoon Gemille
                 df_90d = df_full.tail(90).copy()
                 daily_data_lines = []
                 for idx, row in df_90d.iterrows():
@@ -437,33 +438,66 @@ with tab_tech:
                 st.markdown("---")
 
                 # ==========================================
-                # GEMINI-PROMPTI / PIILOTETTU TEKSTIPAKETTI & NAPPI
+                # LAAJA GEMINI-PROMPTI JA SUORA KOPIOINTINAPPI (JS)
                 # ==========================================
-                st.markdown("### 🤖 Vie data 'Salkku'-Gemiin")
+                st.markdown("### 🤖 Kopioi laaja teknis-fundamentaalinen analyysipaketti suoraan leikepöydälle")
 
-                gemini_prompt_text = f"""Olet ammattimainen sijoitusanalyytikko, strategi ja opas. Tehtäväsi on analysoida osakkeen {tech_stock} teknistä kehitystä alla olevan **90 pörssipäivän yksityiskohtaisen historiadatan** perusteella. 
+                gemini_prompt_text = f"""Olet ammattimainen sijoitusanalyytikko, strategi ja opas. Tehtävänäsi on tehdä perusteellinen, laaja ja syväluotaava sijoitusanalyysi osakkeesta {tech_stock}. 
 
-Kerro analyysissäsi suomeksi:
-1. Miten pitkän ja lyhyen aikavälin trendit (SMA 50 & SMA 200), momentti (RSI) sekä MACD (MACD-linja suhteessa signaalilinjaan) ovat kehittyneet jakson aikana (löytyykö pohjanmuodostuksia, risteyksiä, ylikuumenemista tai käännekohtia)?
-2. Missä vaiheessa sykliä osake on tällä hetkellä suhteessa liukuviin keskiarvoihin ja 1 vuoden tuki- ({support_level} {currency}) sekä vastustasoihin ({resistance_level} {currency}).
-3. Ammattimainen näkemys osakkeen teknisestä tilasta ja riski/tuotto-suhteesta.
+Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilanteen, analyytikkojen konsensuksen ja tavoitehinnat. Vastaa suomeksi ja rakenna vastauksestasi selkeästi jäsennelty, kattava raportti seuraavien osa-alueiden pohjalta:
 
---- HISTORIADATA (Pvm | Kurssi | SMA50 | SMA200 | RSI | MACD-linja | MACD-signaali) ---
+1. TEKNINEN TRENDI JA MOMENTTI (Päivädata viimeisiltä 90 pörssipäivältä):
+- Analysoi alla olevan 90 pörssipäivän historiadatan perusteella, miten lyhyen (SMA 50) ja pitkän (SMA 200) aikavälin trendit, RSI sekä MACD (MACD-linja vs. signaalilinja) ovat kehittyneet.
+- Tunnista mahdolliset käännekohdat, ylikuumenemiset, pohjanmuodostukset tai divergenssit.
+- Huomioi nykykurssin sijainti suhteessa 1 vuoden tuki- ({support_level} {currency}) ja vastustasoihin ({resistance_level} {currency}).
+
+2. ANALYYTIKOIDEN KONSENSUS JA MUUTOKSET (Viimeiset 90 päivää):
+- Tarkista osakkeen tämänhetkinen konsensus-suositus (Osta/Pidä/Myy) ja keskimääräinen tavoitehinta.
+- Miten analyytikkojen tavoitehinnat, suositukset tai tulosennusteet ovat muuttuneet tai päivittyneet viimeisen 90 päivän aikana? Onko nähty merkittäviä nostoja tai laskuja (upgrades/downgrades)?
+
+3. RISTIINVERTAILU JA STRATEGINEN SYNTEESI:
+- Onko osakkeen teknisessä kuvassa (esim. vahva tekninen nousu tai laskutrendi) ja analyytikkojen arvioissa / konsensuksessa ristiriitaa? (Esimerkiksi: hinnoitteleeko markkina teknisesti eri tavalla kuin mitä analyytikkojen tavoitehinnat tai tuoreet uutiset antavat olettaa?)
+- Millainen on osakkeen nykyinen riski/tuotto-suhde (Risk/Reward) sijoittajan näkökulmasta?
+- Anna lopuksi selkeä strateginen näkemys: onko kyseessä kyseisen syklin mukaan tarkkailtava, ostettava vai varovaisuuteen kehoittava kohde.
+
+--- 90 PÖRSSIPÄIVÄN HISTORIADATA ({tech_stock}) ---
 {daily_data_text}
-------------------------------------------------------------------------------------"""
+-------------------------------------------------------"""
 
-                # Luodaan tyylikäs nappi, joka näyttää kopioitavan tekstin siistissä laatikossa vain tarvittaessa
-                if "show_prompt" not in st.session_state:
-                    st.session_state.show_prompt = False
-
-                col_btn1, col_btn2 = st.columns([1, 2])
-                with col_btn1:
-                    if st.button("📋 Kopioi viimeisen 90 päivän kehitys"):
-                        st.session_state.show_prompt = True
-
-                if st.session_state.show_prompt:
-                    st.success("Tekstipaketti generoitu onnistuneesti! Voit kopioida sen alta.")
-                    st.text_area("Maalaa ja kopioi alla oleva teksti:", value=gemini_prompt_text, height=200)
+                # Toteutetaan suora leikepöytäkopiointi HTML/JS-painikkeella
+                escaped_text = gemini_prompt_text.replace("`", "\\`").replace("$", "\\$")
+                
+                clipboard_html = f"""
+                <div style="margin-bottom: 15px;">
+                    <button onclick="copyToClipboard()" style="
+                        background-color: #0969da;
+                        color: white;
+                        padding: 10px 20px;
+                        border: none;
+                        border-radius: 6px;
+                        font-size: 14px;
+                        font-weight: 600;
+                        cursor: pointer;
+                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+                    ">📋 Kopioi viimeisen 90 päivän kehitys</button>
+                    <span id="copy-status" style="margin-left: 12px; font-size: 14px; color: #1f883d; font-weight: 600; display: none;">✓ Kopioitu leikepöydälle!</span>
+                </div>
+                <script>
+                function copyToClipboard() {{
+                    const text = `{escaped_text}`;
+                    navigator.clipboard.writeText(text).then(() => {{
+                        const status = document.getElementById('copy-status');
+                        status.style.display = 'inline';
+                        setTimeout(() => {{
+                            status.style.display = 'none';
+                        }}, 3000);
+                    }}).catch(err => {{
+                        alert('Kopiointi epäonnistui: ' + err);
+                    }});
+                }}
+                </script>
+                """
+                components.html(clipboard_html, height=60)
                 
                 st.markdown("---")
 
@@ -560,7 +594,7 @@ Kerro analyysissäsi suomeksi:
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 7.4 - Zebran Salkku täydellisellä 90pv indikaattoripaketilla.")
+    st.write("Versio 7.6 - Zebran Salkku suoralla leikepöytäkopioinnilla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
