@@ -404,16 +404,19 @@ with tab_tech:
 
                 df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
 
-                # Poimitaan viimeiset 90 pörssipäivää taulukkomuotoon Gemille
+                # Poimitaan viimeiset 90 pörssipäivää taulukkomuotoon Gemille (mukaan lukien SMA200, MACD-linja ja Signaalilinja)
                 df_90d = df_full.tail(90).copy()
                 daily_data_lines = []
                 for idx, row in df_90d.iterrows():
                     date_str = idx.strftime('%Y-%m-%d')
                     c_val = round(float(row['Close']), 2)
                     sma50_val = round(float(row['SMA 50']), 2) if not pd.isna(row['SMA 50']) else "N/A"
+                    sma200_val = round(float(row['SMA 200']), 2) if not pd.isna(row['SMA 200']) else "N/A"
                     rsi_val = round(float(row['RSI']), 1) if not pd.isna(row['RSI']) else "N/A"
-                    macd_val = round(float(row['MACD']), 2) if not pd.isna(row['MACD']) else "N/A"
-                    daily_data_lines.append(f"{date_str} | Kurssi: {c_val} | SMA50: {sma50_val} | RSI: {rsi_val} | MACD: {macd_val}")
+                    macd_line = round(float(row['MACD']), 2) if not pd.isna(row['MACD']) else "N/A"
+                    macd_sig = round(float(row['MACD Signal']), 2) if not pd.isna(row['MACD Signal']) else "N/A"
+                    
+                    daily_data_lines.append(f"{date_str} | Kurssi: {c_val} | SMA50: {sma50_val} | SMA200: {sma200_val} | RSI: {rsi_val} | MACD-linja: {macd_line} | MACD-signaali: {macd_sig}")
                 
                 daily_data_text = "\n".join(daily_data_lines)
 
@@ -441,13 +444,13 @@ with tab_tech:
                 gemini_prompt_text = f"""Olet ammattimainen sijoitusanalyytikko, strategi ja opas. Tehtäväsi on analysoida osakkeen {tech_stock} teknistä kehitystä alla olevan **90 pörssipäivän yksityiskohtaisen historiadatan** perusteella. 
 
 Kerro analyysissäsi suomeksi:
-1. Miten trendi, momentti (RSI) ja MACD ovat kehittyneet jakson aikana (löytyykö pohjanmuodostuksia, ylikuumenemista tai käännekohtia)?
+1. Miten pitkän ja lyhyen aikavälin trendit (SMA 50 & SMA 200), momentti (RSI) sekä MACD (MACD-linja suhteessa signaalilinjaan) ovat kehittyneet jakson aikana (löytyykö pohjanmuodostuksia, risteyksiä, ylikuumenemista tai käännekohtia)?
 2. Missä vaiheessa sykliä osake on tällä hetkellä suhteessa liukuviin keskiarvoihin ja 1 vuoden tuki- ({support_level} {currency}) sekä vastustasoihin ({resistance_level} {currency}).
-3. Ammattimainen näkemys osakkeen teknisestä tilasta.
+3. Ammattimainen näkemys osakkeen teknisestä tilasta ja riski/tuotto-suhteesta.
 
---- HISTORIADATA (Päivämäärä | Kurssi | SMA50 | RSI | MACD) ---
+--- HISTORIADATA (Pvm | Kurssi | SMA50 | SMA200 | RSI | MACD-linja | MACD-signaali) ---
 {daily_data_text}
---------------------------------------------------------------"""
+------------------------------------------------------------------------------------"""
 
                 # Luodaan tyylikäs nappi, joka näyttää kopioitavan tekstin siistissä laatikossa vain tarvittaessa
                 if "show_prompt" not in st.session_state:
@@ -557,7 +560,7 @@ Kerro analyysissäsi suomeksi:
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 7.3 - Zebran Salkku piilotetulla 90pv datan kopiointinapilla.")
+    st.write("Versio 7.4 - Zebran Salkku täydellisellä 90pv indikaattoripaketilla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
