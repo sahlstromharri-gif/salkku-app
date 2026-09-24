@@ -55,6 +55,16 @@ st.markdown("""
         color: #9a6700;
         font-weight: 600;
     }
+    .info-box {
+        background-color: #ffffff;
+        padding: 12px 15px;
+        border-radius: 6px;
+        border-left: 4px solid #0969da;
+        font-size: 13px;
+        color: #24292f;
+        margin-bottom: 15px;
+        box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -79,7 +89,7 @@ with col_title:
     st.markdown("<h1 style='padding-top: 25px;'>Zebran Salkku</h1>", unsafe_allow_html=True)
 
 # Luodaan kolme välilehteä
-tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurssit & Analyytikot", "📊 Tekniset Indikaattorit"])
+tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurssit & Kehitys", "📊 Tekniset Indikaattorit"])
 
 # ==========================================
 # VÄLILEHTI 1: UUTISVAHTI & GMAIL
@@ -195,7 +205,7 @@ with tab_news:
         if creds and creds.valid:
             try:
                 service = build('gmail', 'v1', credentials=creds)
-                query_str = 'from:hei@mail.nordnet.fi Aamukirje'
+                query_str = 'Nordnet Aamukirje OR Sijoituskirje'
                 results = service.users().messages().list(userId='me', q=query_str, maxResults=10).execute()
                 messages = results.get('messages', [])
                 
@@ -246,7 +256,7 @@ with tab_news:
 
 
 # ==========================================
-# VÄLILEHTI 2: KURSSIKEHITYS & ANALYYTIKOT
+# VÄLILEHTI 2: KURSSIKEHITYS
 # ==========================================
 with tab_charts:
     st.markdown("Valitse osakkeet ja kalenteriaika. Kurssikehitys lasketaan kalenteripäivien mukaisesti.")
@@ -317,31 +327,16 @@ with tab_charts:
                             change_pct = ((latest_price / start_price) - 1) * 100
                             
                             currency = "€" if ".HE" in symbol else "$"
-                            
-                            t = yf.Ticker(symbol)
-                            rec_summary = "Ei saatavilla"
-                            target_mean = "Ei saatavilla"
-                            
-                            try:
-                                info = t.info
-                                if 'targetMeanPrice' in info and info['targetMeanPrice']:
-                                    target_mean = f"{round(info['targetMeanPrice'], 2)} {currency}"
-                                if 'recommendationKey' in info and info['recommendationKey']:
-                                    rec_summary = info['recommendationKey'].upper()
-                            except Exception:
-                                pass
 
                             summary_data.append({
                                 "Osake": symbol,
                                 f"Kurssi ({currency})": round(latest_price, 2),
-                                "Muutos %": round(change_pct, 2),
-                                "Analyytikkojen suositus": rec_summary,
-                                "Tavoitehinta (keskiarvo)": target_mean
+                                "Muutos %": round(change_pct, 2)
                             })
 
                 if summary_data:
                     summary_df = pd.DataFrame(summary_data)
-                    st.markdown("### 📋 Yhteenveto & Analyytikkojen tiedot")
+                    st.markdown("### 📋 Yhteenveto & Kurssikehitys")
                     st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
             else:
@@ -353,11 +348,11 @@ with tab_charts:
 
 
 # ==========================================
-# VÄLILEHTI 3: TEKNISET INDIKAATTORIT
+# VÄLILEHTI 3: TEKNISET INDIKAATTORIT & GEMINI-PAKETTI
 # ==========================================
 with tab_tech:
-    st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot & Indikaattorit**")
-    st.markdown("Kaikki keskeiset indikaattorit on jaettu omille selkeille kaavioilleen.")
+    st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot, Indikaattorit & Trendit**")
+    st.markdown("Kaikki keskeiset indikaattorit, selitykset, tuki-/vastustasot sekä 90 päivän trendihistoria Gemiä varten.")
 
     tech_stock = st.selectbox("Valitse osake tekniseen analyysiin:", options=all_symbols, key="tech_stock_select")
 
@@ -401,12 +396,29 @@ with tab_tech:
                 df_full['MACD Signal'] = df_full['MACD'].ewm(span=9, adjust=False).mean()
                 df_full['MACD Hist'] = df_full['MACD'] - df_full['MACD Signal']
 
+                # Lasketaan tuki- ja vastustasot (Resistance & Support) viimeisen vuoden datasta
                 one_year_ago = datetime.today() - timedelta(days=365)
+                df_year = df_full[df_full.index >= pd.Timestamp(one_year_ago)]
+                resistance_level = float(df_year['High'].max())
+                support_level = float(df_year['Low'].min())
+
                 df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
 
+                # Poimitaan viimeiset 90 päivää trendihistoriaa varten
+                df_90d = df_full.tail(90).copy()
+                price_90d_ago = float(df_90d['Close'].iloc[0])
                 latest_price = float(df_full['Close'].iloc[-1])
+                change_90d_pct = ((latest_price / price_90d_ago) - 1) * 100
+
+                rsi_90d_ago = float(df_90d['RSI'].iloc[0]) if not pd.isna(df_90d['RSI'].iloc[0]) else 50.0
                 latest_rsi = float(df_full['RSI'].iloc[-1]) if not pd.isna(df_full['RSI'].iloc[-1]) else 50.0
+
                 latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc[-1]) else latest_price
+                latest_sma200 = float(df_full['SMA 200'].iloc[-1]) if not pd.isna(df_full['SMA 200'].iloc[-1]) else latest_price
+                latest_macd = float(df_full['MACD'].iloc[-1]) if not pd.isna(df_full['MACD'].iloc[-1]) else 0.0
+                latest_macd_signal = float(df_full['MACD Signal'].iloc[-1]) if not pd.isna(df_full['MACD Signal'].iloc[-1]) else 0.0
+                latest_bb_upper = float(df_full['Bollinger Ylä'].iloc[-1]) if not pd.isna(df_full['Bollinger Ylä'].iloc[-1]) else latest_price
+                latest_bb_lower = float(df_full['Bollinger Ala'].iloc[-1]) if not pd.isna(df_full['Bollinger Ala'].iloc[-1]) else latest_price
 
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
@@ -418,6 +430,40 @@ with tab_tech:
                     trend_status = "Nouseva (SMA 50 yläpuolella)" if latest_price > latest_sma50 else "Laskeva (SMA 50 alapuolella)"
                     st.metric(label="Trendi (SMA 50)", value=f"{round(latest_sma50, 2)} {currency}", delta=trend_status)
 
+                st.markdown("---")
+
+                # ==========================================
+                # GEMINI-PROMPTI / KOPIOINTIOLAOSIO (90 PVL TRENDILLÄ)
+                # ==========================================
+                st.markdown("### 🤖 Vie kattava indikaattoripaketti 'Salkku'-Gemiin")
+                st.markdown("Tämä paketti sisältää tuoreen tilanteen lisäksi **viimeisen 90 päivän kehityksen**, jotta Gemi pystyy analysoimaan kurssitrendiä, momentin muutoksia ja teknistä sykliä luotettavasti.")
+
+                gemini_prompt_text = f"""Olet ammattimainen sijoitusanalyytikko, strategi ja opas. Analysoi seuraavat osakkeen {tech_stock} tekniset indikaattorit ja 90 päivän trendihistoria. Anna kattava ja ammattimainen näkemys osakkeen sen hetkisestä trendistä, momentista, mahdollisista riskeistä ja kääntöpisteistä suomeksi:
+
+1. KOHDE JA NYKYKURSSI:
+- Osake: {tech_stock}
+- Viimeisin kurssi: {latest_price} {currency}
+- 90 päivän kurssikehitys: {round(change_90d_pct, 2)} % (Kurssi 90pv sitten: {round(price_90d_ago, 2)} {currency})
+
+2. TRENDI JA KESKIARVOT (90 PVL KEHITYS):
+- SMA 50: {round(latest_sma50, 2)} {currency}
+- SMA 200: {round(latest_sma200, 2)} {currency}
+- Trenditulkinta: Kurssi on suhteessa SMA 50 keskiarvoon ({'Nouseva / Yläpuolella' if latest_price > latest_sma50 else 'Laskeva / Alapuolella'})
+
+3. MOMENTUM JA OSKILLAATTORIT (90 PVL KEHITYS):
+- RSI (14) Nyt: {round(latest_rsi, 1)} ({rsi_status})
+- RSI (14) 90 päivää sitten: {round(rsi_90d_ago, 1)}
+- MACD-linja: {round(latest_macd, 2)} | Signaalilinja: {round(latest_macd_signal, 2)}
+
+4. VOLATILITEETTI JA TUKITASOT:
+- Bollingerin nauhat (Yläreuna): {round(latest_bb_upper, 2)} {currency}
+- Bollingerin nauhat (Alareuna): {round(latest_bb_lower, 2)} {currency}
+- Vastustaso (Resistance - 1v ylin): {round(resistance_level, 2)} {currency}
+- Tukitaso (Support - 1v alin): {round(support_level, 2)} {currency}
+
+Arvioi näiden tietojen pohjalta, onko osakkeella vahva trendi, ollaanko lähestymistuki- tai vastustasoja, ja millainen riski/tuotto-suhde tilanteessa tällä hetkellä vallitsee."""
+
+                st.text_area("Kopioi tämä laajempi paketti Salkku-Gemillesi:", value=gemini_prompt_text, height=250)
                 st.markdown("---")
 
                 # 1. KYNTTILÄKAAVIO & LIUKUVAT KESKIARVOT
@@ -434,6 +480,14 @@ with tab_tech:
                 fig_candlestick.update_layout(template="plotly_white", height=450, xaxis_rangeslider_visible=False, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_candlestick, use_container_width=True)
 
+                st.markdown("""
+                    <div class="info-box">
+                        <b>Miten tulkitaan:</b> Kynttiläkaavio näyttää päivittäiset avaus-, sulku-, ylä- ja alikurssit. Puna-vihreät kynttilät kertovat hintakehityksestä. 
+                        <b>SMA 50</b> ja <b>SMA 200</b> ovat liukuvia keskiarvoja. Kun kurssi on SMA 50:n yläpuolella, lyhyen aikavälin trendi on nouseva. 
+                        Kultainen risteys (Golden Cross, jossa SMA 50 alittaa/ylittää SMA 200:n) on tärkeä pitkän aikavälin signaali.
+                    </div>
+                """, unsafe_allow_html=True)
+
                 # 2. KAUPANKÄYNTIVOLYYMI
                 st.subheader("2. Kaupankäyntivolyymi")
                 fig_vol = go.Figure(data=[
@@ -441,6 +495,12 @@ with tab_tech:
                 ])
                 fig_vol.update_layout(template="plotly_white", height=250, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_vol, use_container_width=True)
+
+                st.markdown("""
+                    <div class="info-box">
+                        <b>Miten tulkitaan:</b> Volyymi kertoo, kuinka paljon osakkeita on vaihdettu kyseisenä päivänä. Korkea volyymi hintaliikkeen yhteydessä vahvistaa trendiä (ostajien tai myyjien vahva paine). Matala volyymi kertoo hiljaisemmasta markkinasta.
+                    </div>
+                """, unsafe_allow_html=True)
 
                 # 3. BOLLINGERIN NAUHAT
                 st.subheader("3. Bollingerin nauhat (20 pvl, 2σ)")
@@ -453,6 +513,12 @@ with tab_tech:
                 fig_bb.update_layout(template="plotly_white", height=350, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_bb, use_container_width=True)
 
+                st.markdown("""
+                    <div class="info-box">
+                        <b>Miten tulkitaan:</b> Bollingerin nauhat mittaavat kurssin volatiliteettia. Kun kurssi koskettaa yläreunaa, osake saattaa olla tilapäisesti yliostettu. Kun se koskettaa alareunaa, osake voi olla ylimyyty. Nauhojen kapeneminen (Squeeze) ennakoi usein voimakasta kurssiliikettä suuntaan tai toiseen.
+                    </div>
+                """, unsafe_allow_html=True)
+
                 # 4. MACD
                 st.subheader("4. MACD (Momentti)")
                 fig_macd = go.Figure(data=[
@@ -462,6 +528,12 @@ with tab_tech:
                 ])
                 fig_macd.update_layout(template="plotly_white", height=300, margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_macd, use_container_width=True)
+
+                st.markdown("""
+                    <div class="info-box">
+                        <b>Miten tulkitaan:</b> MACD mittaa kahden liukuvan keskiarvon välistä eroa ja näyttää momentin muutoksia. Kun MACD-linja ylittää signaalilinjan ylöspäin, se on tyypillisesti osta-signaali (positiivinen momentti kiihtyy). Histogrammi näyttää eron suuruutta pylväinä.
+                    </div>
+                """, unsafe_allow_html=True)
 
                 # 5. RSI
                 st.subheader("5. RSI (14) - Yliostettu / Ylimyyty")
@@ -473,6 +545,12 @@ with tab_tech:
                 fig_rsi.update_layout(template="plotly_white", height=300, yaxis=dict(range=[0, 100]), margin=dict(l=10, r=10, t=10, b=10))
                 st.plotly_chart(fig_rsi, use_container_width=True)
 
+                st.markdown("""
+                    <div class="info-box">
+                        <b>Miten tulkitaan:</b> RSI (Relative Strength Index) vaihtelee välillä 0–100. Arvo yli 70 viittaa siihen, että osake on yliostettu (mahdollinen kurssikorjaus alaspäin mahdollinen). Arvo alle 30 viittaa ylimyytyyn tilaan (mahdollinen pohjanmuodostus ja nousuvara).
+                    </div>
+                """, unsafe_allow_html=True)
+
             else:
                 st.error("Puuttuvia hintatietoja osakkeen datassa.")
         else:
@@ -481,7 +559,7 @@ with tab_tech:
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 6.6 - Zebran Salkku korjatuilla analyytikkotiedoilla.")
+    st.write("Versio 7.1 - Zebran Salkku + 90pv Trendianalyysi.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
