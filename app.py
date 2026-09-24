@@ -423,7 +423,7 @@ with tab_tech:
 
                 latest_price = float(df_full['Close'].iloc[-1])
                 latest_rsi = float(df_full['RSI'].iloc[-1]) if not pd.isna(df_full['RSI'].iloc[-1]) else 50.0
-                latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc$-1) else latest_price
+                latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc[-1]) else latest_price
 
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
@@ -593,7 +593,7 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 7.7 - Zebran Salkku vuositason historiadata-kopioinnilla.")
+    st.write("Versio 7.8 - Zebran Salkku korjatulla syntaksilla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
