@@ -353,9 +353,18 @@ with tab_charts:
 # ==========================================
 with tab_tech:
     st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot, Indikaattorit & Vuositason Trendit**")
-    st.markdown("Kaikki keskeiset indikaattorit, tuki-/vastustasot sekä suora leikepöytäkopiointi Gemiä varten.")
+    st.markdown("Valitse watchlistin osake tai syötä vapaa ticker (esim. MU, AAPL).")
 
-    tech_stock = st.selectbox("Valitse osake tekniseen analyysiin:", options=all_symbols, key="tech_stock_select")
+    # Luodaan valkolista + vaihtoehto "Muu osake..."
+    tech_options = all_symbols + ["Muu osake (kirjoita ticker)..."]
+    selected_tech_option = st.selectbox("Valitse osake tekniseen analyysiin:", options=tech_options, key="tech_stock_select")
+
+    # Jos valittiin "Muu osake...", näytetään tekstilaatikko tickerille
+    if selected_tech_option == "Muu osake (kirjoita ticker)...":
+        custom_ticker = st.text_input("Syötä osakkeen ticker-symboli (esim. MU, AAPL, TSLA):", "").strip().upper()
+        tech_stock = custom_ticker if custom_ticker else None
+    else:
+        tech_stock = selected_tech_option
 
     if tech_stock:
         currency = "€" if ".HE" in tech_stock else "$"
@@ -405,7 +414,7 @@ with tab_tech:
 
                 df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
 
-                # Poimitaan viimeinen vuosi (365 kalenteripäivää / n. 252 pörssipäivää) taulukkomuotoon Gemille
+                # Poimitaan viimeinen vuosi taulukkomuotoon Gemille
                 df_year_data = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
                 daily_data_lines = []
                 for idx, row in df_year_data.iterrows():
@@ -586,14 +595,14 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
                 """, unsafe_allow_html=True)
 
             else:
-                st.error("Puuttuvia hintatietoja osakkeen datassa.")
+                st.error("Syötetylle osakkeelle ei löytynyt riittävästi hintatietoja tai ticker on virheellinen.")
         else:
             st.warning("Historiatietoja ei ole riittävästi (vähintään 200 päivää) teknisten indikaattoreiden laskemiseen.")
 
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 7.8 - Zebran Salkku korjatulla syntaksilla.")
+    st.write("Versio 7.9 - Zebran Salkku vapaalla ticker-haulla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
