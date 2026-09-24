@@ -352,7 +352,7 @@ with tab_charts:
 # ==========================================
 with tab_tech:
     st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot, Indikaattorit & Trendit**")
-    st.markdown("Kaikki keskeiset indikaattorit, selitykset, tuki-/vastustasot sekä 90 päivän trendihistoria Gemiä varten.")
+    st.markdown("Kaikki keskeiset indikaattorit, tuki-/vastustasot sekä pörssipäivädata Gemiä varten.")
 
     tech_stock = st.selectbox("Valitse osake tekniseen analyysiin:", options=all_symbols, key="tech_stock_select")
 
@@ -396,7 +396,7 @@ with tab_tech:
                 df_full['MACD Signal'] = df_full['MACD'].ewm(span=9, adjust=False).mean()
                 df_full['MACD Hist'] = df_full['MACD'] - df_full['MACD Signal']
 
-                # Lasketaan tuki- ja vastustasot (Resistance & Support) viimeisen vuoden datasta
+                # Lasketaan tuki- ja vastustasot viimeisen vuoden datasta
                 one_year_ago = datetime.today() - timedelta(days=365)
                 df_year = df_full[df_full.index >= pd.Timestamp(one_year_ago)]
                 resistance_level = float(df_year['High'].max())
@@ -404,21 +404,22 @@ with tab_tech:
 
                 df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
 
-                # Poimitaan viimeiset 90 päivää trendihistoriaa varten
+                # Poimitaan viimeiset 90 pörssipäivää taulukkomuotoon Gemille
                 df_90d = df_full.tail(90).copy()
-                price_90d_ago = float(df_90d['Close'].iloc[0])
+                daily_data_lines = []
+                for idx, row in df_90d.iterrows():
+                    date_str = idx.strftime('%Y-%m-%d')
+                    c_val = round(float(row['Close']), 2)
+                    sma50_val = round(float(row['SMA 50']), 2) if not pd.isna(row['SMA 50']) else "N/A"
+                    rsi_val = round(float(row['RSI']), 1) if not pd.isna(row['RSI']) else "N/A"
+                    macd_val = round(float(row['MACD']), 2) if not pd.isna(row['MACD']) else "N/A"
+                    daily_data_lines.append(f"{date_str} | Kurssi: {c_val} | SMA50: {sma50_val} | RSI: {rsi_val} | MACD: {macd_val}")
+                
+                daily_data_text = "\n".join(daily_data_lines)
+
                 latest_price = float(df_full['Close'].iloc[-1])
-                change_90d_pct = ((latest_price / price_90d_ago) - 1) * 100
-
-                rsi_90d_ago = float(df_90d['RSI'].iloc[0]) if not pd.isna(df_90d['RSI'].iloc[0]) else 50.0
                 latest_rsi = float(df_full['RSI'].iloc[-1]) if not pd.isna(df_full['RSI'].iloc[-1]) else 50.0
-
                 latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc[-1]) else latest_price
-                latest_sma200 = float(df_full['SMA 200'].iloc[-1]) if not pd.isna(df_full['SMA 200'].iloc[-1]) else latest_price
-                latest_macd = float(df_full['MACD'].iloc[-1]) if not pd.isna(df_full['MACD'].iloc[-1]) else 0.0
-                latest_macd_signal = float(df_full['MACD Signal'].iloc[-1]) if not pd.isna(df_full['MACD Signal'].iloc[-1]) else 0.0
-                latest_bb_upper = float(df_full['Bollinger Ylä'].iloc[-1]) if not pd.isna(df_full['Bollinger Ylä'].iloc[-1]) else latest_price
-                latest_bb_lower = float(df_full['Bollinger Ala'].iloc[-1]) if not pd.isna(df_full['Bollinger Ala'].iloc[-1]) else latest_price
 
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
@@ -433,37 +434,34 @@ with tab_tech:
                 st.markdown("---")
 
                 # ==========================================
-                # GEMINI-PROMPTI / KOPIOINTIOLAOSIO (90 PVL TRENDILLÄ)
+                # GEMINI-PROMPTI / PIILOTETTU TEKSTIPAKETTI & NAPPI
                 # ==========================================
-                st.markdown("### 🤖 Vie kattava indikaattoripaketti 'Salkku'-Gemiin")
-                st.markdown("Tämä paketti sisältää tuoreen tilanteen lisäksi **viimeisen 90 päivän kehityksen**, jotta Gemi pystyy analysoimaan kurssitrendiä, momentin muutoksia ja teknistä sykliä luotettavasti.")
+                st.markdown("### 🤖 Vie data 'Salkku'-Gemiin")
 
-                gemini_prompt_text = f"""Olet ammattimainen sijoitusanalyytikko, strategi ja opas. Analysoi seuraavat osakkeen {tech_stock} tekniset indikaattorit ja 90 päivän trendihistoria. Anna kattava ja ammattimainen näkemys osakkeen sen hetkisestä trendistä, momentista, mahdollisista riskeistä ja kääntöpisteistä suomeksi:
+                gemini_prompt_text = f"""Olet ammattimainen sijoitusanalyytikko, strategi ja opas. Tehtäväsi on analysoida osakkeen {tech_stock} teknistä kehitystä alla olevan **90 pörssipäivän yksityiskohtaisen historiadatan** perusteella. 
 
-1. KOHDE JA NYKYKURSSI:
-- Osake: {tech_stock}
-- Viimeisin kurssi: {latest_price} {currency}
-- 90 päivän kurssikehitys: {round(change_90d_pct, 2)} % (Kurssi 90pv sitten: {round(price_90d_ago, 2)} {currency})
+Kerro analyysissäsi suomeksi:
+1. Miten trendi, momentti (RSI) ja MACD ovat kehittyneet jakson aikana (löytyykö pohjanmuodostuksia, ylikuumenemista tai käännekohtia)?
+2. Missä vaiheessa sykliä osake on tällä hetkellä suhteessa liukuviin keskiarvoihin ja 1 vuoden tuki- ({support_level} {currency}) sekä vastustasoihin ({resistance_level} {currency}).
+3. Ammattimainen näkemys osakkeen teknisestä tilasta.
 
-2. TRENDI JA KESKIARVOT (90 PVL KEHITYS):
-- SMA 50: {round(latest_sma50, 2)} {currency}
-- SMA 200: {round(latest_sma200, 2)} {currency}
-- Trenditulkinta: Kurssi on suhteessa SMA 50 keskiarvoon ({'Nouseva / Yläpuolella' if latest_price > latest_sma50 else 'Laskeva / Alapuolella'})
+--- HISTORIADATA (Päivämäärä | Kurssi | SMA50 | RSI | MACD) ---
+{daily_data_text}
+--------------------------------------------------------------"""
 
-3. MOMENTUM JA OSKILLAATTORIT (90 PVL KEHITYS):
-- RSI (14) Nyt: {round(latest_rsi, 1)} ({rsi_status})
-- RSI (14) 90 päivää sitten: {round(rsi_90d_ago, 1)}
-- MACD-linja: {round(latest_macd, 2)} | Signaalilinja: {round(latest_macd_signal, 2)}
+                # Luodaan tyylikäs nappi, joka näyttää kopioitavan tekstin siistissä laatikossa vain tarvittaessa
+                if "show_prompt" not in st.session_state:
+                    st.session_state.show_prompt = False
 
-4. VOLATILITEETTI JA TUKITASOT:
-- Bollingerin nauhat (Yläreuna): {round(latest_bb_upper, 2)} {currency}
-- Bollingerin nauhat (Alareuna): {round(latest_bb_lower, 2)} {currency}
-- Vastustaso (Resistance - 1v ylin): {round(resistance_level, 2)} {currency}
-- Tukitaso (Support - 1v alin): {round(support_level, 2)} {currency}
+                col_btn1, col_btn2 = st.columns([1, 2])
+                with col_btn1:
+                    if st.button("📋 Kopioi viimeisen 90 päivän kehitys"):
+                        st.session_state.show_prompt = True
 
-Arvioi näiden tietojen pohjalta, onko osakkeella vahva trendi, ollaanko lähestymistuki- tai vastustasoja, ja millainen riski/tuotto-suhde tilanteessa tällä hetkellä vallitsee."""
-
-                st.text_area("Kopioi tämä laajempi paketti Salkku-Gemillesi:", value=gemini_prompt_text, height=250)
+                if st.session_state.show_prompt:
+                    st.success("Tekstipaketti generoitu onnistuneesti! Voit kopioida sen alta.")
+                    st.text_area("Maalaa ja kopioi alla oleva teksti:", value=gemini_prompt_text, height=200)
+                
                 st.markdown("---")
 
                 # 1. KYNTTILÄKAAVIO & LIUKUVAT KESKIARVOT
@@ -559,7 +557,7 @@ Arvioi näiden tietojen pohjalta, onko osakkeella vahva trendi, ollaanko lähest
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 7.1 - Zebran Salkku + 90pv Trendianalyysi.")
+    st.write("Versio 7.3 - Zebran Salkku piilotetulla 90pv datan kopiointinapilla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
