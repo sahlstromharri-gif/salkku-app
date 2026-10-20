@@ -84,7 +84,7 @@ with col_img:
 with col_title:
     st.markdown("<h1 style='padding-top: 25px;'>Zebran Salkku</h1>", unsafe_allow_html=True)
 
-# Luodaan kaksi välilehteä (Gmail poistettu)
+# Luodaan välilehdet
 tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti", "📈 Kurssit & Kehitys", "📊 Tekniset Indikaattorit & Tunnusluvut"])
 
 # ==========================================
@@ -268,30 +268,4 @@ with tab_charts:
                             start_price = float(series.iloc[0])
                             change_pct = ((latest_price / start_price) - 1) * 100
                             
-                            currency = "€" if ".HE" in symbol else "$"
-
-                            summary_data.append({
-                                "Osake": symbol,
-                                f"Kurssi ({currency})": round(latest_price, 2),
-                                "Muutos %": round(change_pct, 2)
-                            })
-
-                if summary_data:
-                    summary_df = pd.DataFrame(summary_data)
-                    st.markdown("### 📋 Yhteenveto & Kurssikehitys")
-                    st.dataframe(summary_df, use_container_width=True, hide_index=True)
-
-            else:
-                st.warning("Valitulla aikajaksolla ei löytynyt riittävästi yhteisiä hintatietoja.")
-        else:
-            st.warning("Historiatietojen haku epäonnistui valituille osakkeille.")
-    else:
-        st.info("Valitse vähintään yksi osake yllä olevasta valikosta nähdäksesi kaavion ja kurssitiedot.")
-
-
-# ==========================================
-# VÄLILEHTI 3: TEKNISET INDIKAATTORIT & TUNNUSLUVUT
-# ==========================================
-with tab_tech:
-    st.markdown("📊 **Tekninen analyysi, Tunnusluvut & Vuositason Trendit**")
-    st.markdown("Valitse watchlistin osake tai syötä vapaa ticker (esim. MU, AAP
+                            currency = "€" if ".HE" in symbol else
