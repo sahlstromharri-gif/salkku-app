@@ -4,19 +4,13 @@ import yfinance as yf
 import feedparser
 from datetime import datetime, timedelta
 import os.path
-import pickle
-from google.auth.transport.requests import Request
-from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
 from time import mktime
 
-# Määritetään kansionpolku, jossa app.py ja credentials.json sijaitsevat
+# Määritetään kansionpolku, jossa app.py sijaitsee
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-CREDENTIALS_PATH = os.path.join(BASE_DIR, 'credentials.json')
-TOKEN_PATH = os.path.join(BASE_DIR, 'token.pickle')
 
 # Sivun asetukset (Vaalea teema ja zebra-ikoni)
 st.set_page_config(
@@ -90,14 +84,14 @@ with col_img:
 with col_title:
     st.markdown("<h1 style='padding-top: 25px;'>Zebran Salkku</h1>", unsafe_allow_html=True)
 
-# Luodaan kolme välilehteä
-tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurssit & Kehitys", "📊 Tekniset Indikaattorit & Tunnusluvut"])
+# Luodaan kaksi välilehteä (Gmail poistettu)
+tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti", "📈 Kurssit & Kehitys", "📊 Tekniset Indikaattorit & Tunnusluvut"])
 
 # ==========================================
-# VÄLILEHTI 1: UUTISVAHTI & GMAIL
+# VÄLILEHTI 1: UUTISVAHTI
 # ==========================================
 with tab_news:
-    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia uutisia (enintään 14 päivää vanhoja) sekä Nordnetin Aamukirjeitä.")
+    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia kansainvälisiä ja kotimaisia uutisia (enintään 14 päivää vanhoja).")
 
     selected_stocks_news = st.multiselect(
         "Suodata uutisia osakkeiden mukaan (jätä tyhjäksi nähdäksesi kaikki):",
@@ -126,7 +120,7 @@ with tab_news:
             "VALMT.HE": "Valmet",
             "LDSK.HE": "LeadDesk",
             "NVDA": "Nvidia",
-            "MU": "Micron Technology OR MU stock",
+            "MU": "micron",
             "ACLS": "Axcelis",
             "OUST": "Ouster",
             "DX": "Dynex Capital"
@@ -139,14 +133,12 @@ with tab_news:
             try:
                 feed = feedparser.parse(rss_url)
                 for entry in feed.entries[:5]:
-                    # Tarkistetaan julkaisupäivä
                     pub_date = None
                     if hasattr(entry, "published_parsed") and entry.published_parsed:
                         pub_date = datetime.fromtimestamp(mktime(entry.published_parsed))
                     elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
                         pub_date = datetime.fromtimestamp(mktime(entry.updated_parsed))
                     
-                    # Jos päivä löytyy ja se on uudempi kuin 14 päivää
                     if pub_date and pub_date >= fourteen_days_ago:
                         news_list.append({
                             "source_type": "Kansainväliset markkinat",
@@ -184,68 +176,13 @@ with tab_news:
             except Exception:
                 continue
 
-        # 3. Gmail (Nordnet Aamukirjeet)
-        SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
-        creds = None
-        
-        if os.path.exists(TOKEN_PATH):
-            with open(TOKEN_PATH, 'rb') as token:
-                creds = pickle.load(token)
-                
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
-                try:
-                    creds.refresh(Request())
-                except Exception:
-                    creds = None
-            elif os.path.exists(CREDENTIALS_PATH):
-                try:
-                    flow = InstalledAppFlow.from_client_secrets_file(CREDENTIALS_PATH, SCOPES)
-                    creds = flow.run_local_server(port=0)
-                    with open(TOKEN_PATH, 'wb') as token:
-                        pickle.dump(creds, token)
-                except Exception:
-                    creds = None
-
-        if creds and creds.valid:
-            try:
-                service = build('gmail', 'v1', credentials=creds)
-                query_str = 'Nordnet Aamukirje OR Sijoituskirje'
-                results = service.users().messages().list(userId='me', q=query_str, maxResults=10).execute()
-                messages = results.get('messages', [])
-                
-                for msg in messages:
-                    txt = service.users().messages().get(userId='me', id=msg['id']).execute()
-                    headers = txt.get('payload', {}).get('headers', [])
-                    
-                    subject = "Nordnet Aamukirje"
-                    date_val = "Sähköposti"
-                    for h in headers:
-                        if h['name'] == 'Subject':
-                            subject = h['value']
-                        if h['name'] == 'Date':
-                            date_val = h['value'][:16]
-                            
-                    gmail_url = f"https://mail.google.com/mail/u/0/#inbox/{msg['id']}"
-                    
-                    news_list.append({
-                        "source_type": "Gmail (Nordnet)",
-                        "symbol": "Salkku / Yleinen",
-                        "title": f"📧 {subject}",
-                        "url": gmail_url,
-                        "publisher": "Nordnet Aamukirje",
-                        "date": date_val
-                    })
-            except Exception:
-                pass
-
         return pd.DataFrame(news_list)
 
-    with st.spinner("Haetaan tuoreimpia (max 14pv) uutisia, Arvopaperia ja Nordnetin sähköposteja..."):
+    with st.spinner("Haetaan tuoreimpia (max 14pv) uutisia ja Arvopaperia..."):
         news_df = fetch_all_news(active_symbols_news)
 
     if not news_df.empty:
-        st.subheader(f"Ajankohtaiset uutiset ja aamukirjeet ({len(news_df)} kpl)")
+        st.subheader(f"Ajankohtaiset uutiset ({len(news_df)} kpl)")
         for _, row in news_df.iterrows():
             st.markdown(f"""
                 <div class="news-card">
@@ -357,35 +294,4 @@ with tab_charts:
 # ==========================================
 with tab_tech:
     st.markdown("📊 **Tekninen analyysi, Tunnusluvut & Vuositason Trendit**")
-    st.markdown("Valitse watchlistin osake tai syötä vapaa ticker (esim. MU, AAPL).")
-
-    tech_options = all_symbols + ["Muu osake (kirjoita ticker)..."]
-    selected_tech_option = st.selectbox("Valitse osake tarkasteluun:", options=tech_options, key="tech_stock_select")
-
-    if selected_tech_option == "Muu osake (kirjoita ticker)...":
-        custom_ticker = st.text_input("Syötä osakkeen ticker-symboli (esim. MU, AAPL, TSLA):", "").strip().upper()
-        tech_stock = custom_ticker if custom_ticker else None
-    else:
-        tech_stock = selected_tech_option
-
-    if tech_stock:
-        currency = "€" if ".HE" in tech_stock else "$"
-        
-        @st.cache_data(ttl=3600)
-        def fetch_full_tech_data(symbol):
-            df = yf.download(symbol, period="2y", progress=False)
-            if not df.empty:
-                if isinstance(df.columns, pd.MultiIndex):
-                    df.columns = [col[0] for col in df.columns]
-                return df
-            return pd.DataFrame()
-
-        with st.spinner(f"Ladataan kynttilädataa, tunnuslukuja ja lasketaan indikaattoreita osakkeelle {tech_stock}..."):
-            df_full = fetch_full_tech_data(tech_stock)
-            
-            # Haetaan fundamenttitunnusluvut yfinance info-rajapinnasta
-            t_obj = yf.Ticker(tech_stock)
-            t_info = t_obj.info
-            
-            pe_ratio = t_info.get('trailingPE', 'Ei saatavilla')
-            fwd_pe = t_info.get('forwardPE', 'Ei saatavilla')
+    st.markdown("Valitse watchlistin osake tai syötä vapaa ticker (esim. MU, AAP
