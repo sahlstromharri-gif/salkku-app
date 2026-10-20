@@ -11,6 +11,7 @@ from googleapiclient.discovery import build
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit.components.v1 as components
+from time import mktime
 
 # Määritetään kansionpolku, jossa app.py ja credentials.json sijaitsevat
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -96,7 +97,7 @@ tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurss
 # VÄLILEHTI 1: UUTISVAHTI & GMAIL
 # ==========================================
 with tab_news:
-    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia kansainvälisiä ja kotimaisia uutisia sekä Nordnetin Aamukirjeitä.")
+    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia uutisia (enintään 14 päivää vanhoja) sekä Nordnetin Aamukirjeitä.")
 
     selected_stocks_news = st.multiselect(
         "Suodata uutisia osakkeiden mukaan (jätä tyhjäksi nähdäksesi kaikki):",
@@ -110,6 +111,8 @@ with tab_news:
     @st.cache_data(ttl=600)
     def fetch_all_news(symbols):
         news_list = []
+        now = datetime.now()
+        fourteen_days_ago = now - timedelta(days=14)
         
         search_terms = {
             "CANATU.HE": "Canatu",
@@ -123,45 +126,61 @@ with tab_news:
             "VALMT.HE": "Valmet",
             "LDSK.HE": "LeadDesk",
             "NVDA": "Nvidia",
-            "MU": "Micron Technology",
+            "MU": "Micron Technology OR MU stock",
             "ACLS": "Axcelis",
             "OUST": "Ouster",
             "DX": "Dynex Capital"
         }
 
-        # 1. Kansainväliset uutiset Google RSS:n kautta
+        # 1. Kansainväliset uutiset Google RSS:n kautta (suodatus max 14pv)
         for symbol in symbols:
             term = search_terms.get(symbol, symbol)
-            rss_url = f"https://news.google.com/rss/search?q={term}+stock&hl=en&gl=US&ceid=US:en"
+            rss_url = f"https://news.google.com/rss/search?q={term}&hl=en&gl=US&ceid=US:en"
             try:
                 feed = feedparser.parse(rss_url)
-                for entry in feed.entries[:3]:
-                    news_list.append({
-                        "source_type": "Kansainväliset markkinat",
-                        "symbol": symbol,
-                        "title": entry.title,
-                        "url": entry.link,
-                        "publisher": "Google News / Global",
-                        "date": entry.published[:16] if hasattr(entry, "published") else "Tuore"
-                    })
+                for entry in feed.entries[:5]:
+                    # Tarkistetaan julkaisupäivä
+                    pub_date = None
+                    if hasattr(entry, "published_parsed") and entry.published_parsed:
+                        pub_date = datetime.fromtimestamp(mktime(entry.published_parsed))
+                    elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+                        pub_date = datetime.fromtimestamp(mktime(entry.updated_parsed))
+                    
+                    # Jos päivä löytyy ja se on uudempi kuin 14 päivää
+                    if pub_date and pub_date >= fourteen_days_ago:
+                        news_list.append({
+                            "source_type": "Kansainväliset markkinat",
+                            "symbol": symbol,
+                            "title": entry.title,
+                            "url": entry.link,
+                            "publisher": "Google News / Global",
+                            "date": pub_date.strftime("%Y-%m-%d %H:%M")
+                        })
             except Exception:
                 continue
 
-        # 2. Kotimainen lähde: Arvopaperi.fi Google RSS:n kautta
+        # 2. Kotimainen lähde: Arvopaperi.fi Google RSS:n kautta (suodatus max 14pv)
         for symbol in symbols:
             term = search_terms.get(symbol, symbol)
             rss_url = f"https://news.google.com/rss/search?q={term}+site:arvopaperi.fi&hl=fi&gl=FI&ceid=FI:fi"
             try:
                 feed = feedparser.parse(rss_url)
                 for entry in feed.entries[:3]:
-                    news_list.append({
-                        "source_type": "Kotimainen talousmedia",
-                        "symbol": symbol,
-                        "title": entry.title,
-                        "url": entry.link,
-                        "publisher": "Arvopaperi.fi",
-                        "date": entry.published[:16] if hasattr(entry, "published") else "Kotimainen"
-                    })
+                    pub_date = None
+                    if hasattr(entry, "published_parsed") and entry.published_parsed:
+                        pub_date = datetime.fromtimestamp(mktime(entry.published_parsed))
+                    elif hasattr(entry, "updated_parsed") and entry.updated_parsed:
+                        pub_date = datetime.fromtimestamp(mktime(entry.updated_parsed))
+                    
+                    if pub_date and pub_date >= fourteen_days_ago:
+                        news_list.append({
+                            "source_type": "Kotimainen talousmedia",
+                            "symbol": symbol,
+                            "title": entry.title,
+                            "url": entry.link,
+                            "publisher": "Arvopaperi.fi",
+                            "date": pub_date.strftime("%Y-%m-%d %H:%M")
+                        })
             except Exception:
                 continue
 
@@ -222,7 +241,7 @@ with tab_news:
 
         return pd.DataFrame(news_list)
 
-    with st.spinner("Haetaan tuoreimpia uutisia, Arvopaperia ja Nordnetin sähköposteja..."):
+    with st.spinner("Haetaan tuoreimpia (max 14pv) uutisia, Arvopaperia ja Nordnetin sähköposteja..."):
         news_df = fetch_all_news(active_symbols_news)
 
     if not news_df.empty:
@@ -238,7 +257,7 @@ with tab_news:
                 </div>
             """, unsafe_allow_html=True)
     else:
-        st.info("Ei uutisia saatavilla valituille osakkeille tällä hetkellä.")
+        st.info("Ei tuoreita uutisia (viimeisen 14 päivän ajalta) saatavilla valituille osakkeille.")
 
 
 # ==========================================
@@ -370,249 +389,3 @@ with tab_tech:
             
             pe_ratio = t_info.get('trailingPE', 'Ei saatavilla')
             fwd_pe = t_info.get('forwardPE', 'Ei saatavilla')
-            ps_ratio = t_info.get('priceToSalesTrailing12Months', 'Ei saatavilla')
-
-        if not df_full.empty and len(df_full) > 200:
-            required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-            if all(col in df_full.columns for col in required_cols):
-                
-                df_full['SMA 50'] = df_full['Close'].rolling(window=50).mean()
-                df_full['SMA 200'] = df_full['Close'].rolling(window=200).mean()
-
-                r_mean = df_full['Close'].rolling(window=20).mean()
-                r_std = df_full['Close'].rolling(window=20).std()
-                df_full['Bollinger Keskiarvo'] = r_mean
-                df_full['Bollinger Ylä'] = r_mean + (r_std * 2)
-                df_full['Bollinger Ala'] = r_mean - (r_std * 2)
-
-                delta = df_full['Close'].diff()
-                gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-                loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-                rs = gain / loss
-                df_full['RSI'] = 100 - (100 / (1 + rs))
-
-                exp1 = df_full['Close'].ewm(span=12, adjust=False).mean()
-                exp2 = df_full['Close'].ewm(span=26, adjust=False).mean()
-                df_full['MACD'] = exp1 - exp2
-                df_full['MACD Signal'] = df_full['MACD'].ewm(span=9, adjust=False).mean()
-                df_full['MACD Hist'] = df_full['MACD'] - df_full['MACD Signal']
-
-                # Lasketaan tuki- ja vastustasot viimeisen vuoden datasta
-                one_year_ago = datetime.today() - timedelta(days=365)
-                df_year = df_full[df_full.index >= pd.Timestamp(one_year_ago)]
-                resistance_level = float(df_year['High'].max())
-                support_level = float(df_year['Low'].min())
-
-                df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
-
-                # Poimitaan vuositason historiapäivät Gemille
-                df_year_data = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
-                daily_data_lines = []
-                for idx, row in df_year_data.iterrows():
-                    date_str = idx.strftime('%Y-%m-%d')
-                    c_val = round(float(row['Close']), 2)
-                    sma50_val = round(float(row['SMA 50']), 2) if not pd.isna(row['SMA 50']) else "N/A"
-                    sma200_val = round(float(row['SMA 200']), 2) if not pd.isna(row['SMA 200']) else "N/A"
-                    rsi_val = round(float(row['RSI']), 1) if not pd.isna(row['RSI']) else "N/A"
-                    macd_line = round(float(row['MACD']), 2) if not pd.isna(row['MACD']) else "N/A"
-                    macd_sig = round(float(row['MACD Signal']), 2) if not pd.isna(row['MACD Signal']) else "N/A"
-                    
-                    daily_data_lines.append(f"{date_str} | Kurssi: {c_val} | SMA50: {sma50_val} | SMA200: {sma200_val} | RSI: {rsi_val} | MACD-linja: {macd_line} | MACD-signaali: {macd_sig}")
-                
-                daily_data_text = "\n".join(daily_data_lines)
-
-                latest_price = float(df_full['Close'].iloc[-1])
-                latest_rsi = float(df_full['RSI'].iloc[-1]) if not pd.isna(df_full['RSI'].iloc[-1]) else 50.0
-                latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc[-1]) else latest_price
-
-                # Näytetään metriikat (Kurssi, RSI, Trendi)
-                col_m1, col_m2, col_m3 = st.columns(3)
-                with col_m1:
-                    st.metric(label="Viimeisin kurssi", value=f"{round(latest_price, 2)} {currency}")
-                with col_m2:
-                    rsi_status = "Yliostettu (>70)" if latest_rsi > 70 else ("Ylimyyty (<30)" if latest_rsi < 30 else "Neutraali")
-                    st.metric(label="RSI (14)", value=f"{round(latest_rsi, 1)}", delta=rsi_status)
-                with col_m3:
-                    trend_status = "Nouseva (SMA 50 yläpuolella)" if latest_price > latest_sma50 else "Laskeva (SMA 50 alapuolella)"
-                    st.metric(label="Trendi (SMA 50)", value=f"{round(latest_sma50, 2)} {currency}", delta=trend_status)
-
-                # Näytetään tunnusluvut (P/E, Forward P/E, P/S) omassa rivissään
-                st.markdown("### 📈 Keskeiset tunnusluvut")
-                col_f1, col_f2, col_f3 = st.columns(3)
-                with col_f1:
-                    st.metric(label="P/E (historiallinen)", value=f"{round(pe_ratio, 2) if isinstance(pe_ratio, (int, float)) else pe_ratio}")
-                with col_f2:
-                    st.metric(label="Forward P/E", value=f"{round(fwd_pe, 2) if isinstance(fwd_pe, (int, float)) else fwd_pe}")
-                with col_f3:
-                    st.metric(label="P/S", value=f"{round(ps_ratio, 2) if isinstance(ps_ratio, (int, float)) else ps_ratio}")
-
-                st.markdown("---")
-
-                # ==========================================
-                # LAAJA GEMINI-PROMPTI (MUKANA TUNNUSLUVUT)
-                # ==========================================
-                st.markdown("### 🤖 Kopioi laaja teknis-fundamentaalinen analyysipaketti suoraan leikepöydälle")
-
-                gemini_prompt_text = f"""Olet ammattimainen sijoitusanalyytikko, strategi ja opas. Tehtävänäsi on tehdä perusteellinen, laaja ja syväluotaava sijoitusanalyysi osakkeesta {tech_stock}. 
-
-Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilanteen, analyytikkojen konsensuksen ja tavoitehinnat. Vastaa suomeksi ja rakenna vastauksestasi selkeästi jäsennelty, kattava raportti seuraavien osa-alueiden pohjalta:
-
-1. FUNDAMENTTITUNNUSLUVUT:
-- P/E (historiallinen): {pe_ratio}
-- Forward P/E: {fwd_pe}
-- P/S: {ps_ratio}
-Miten nämä tunnusluvut peilautuvat yhtiön arvostukseen ja sen toimialaan?
-
-2. TEKNINEN TRENDI JA MOMENTTI (Päivädata viimeiseltä vuodelta, pääpaino viimeisissä 90 pörssipäivässä):
-- Huom: Alla on data koko viimeisen vuoden ajalta. Käytä vuositason dataa ison kuvan havaitsemiseen (esim. merkittävät vuositason huiput/pohjat, pitkän aikavälin tukitasot ja vastustasot). Tee kuitenkin varsinainen syvällinen ja yksityiskohtainen momentti-, trendi- ja käännekohta-analyysi (SMA 50, SMA 200, RSI, MACD-linja vs. signaalilinja) **viimeisen 90 pörssipäivän** kehityksen pohjalta.
-- Huomioi nykykurssin sijainti suhteessa 1 vuoden tuki- ({support_level} {currency}) ja vastustasoihin ({resistance_level} {currency}).
-
-3. ANALYYTIKOIDEN KONSENSUS JA MUUTOKSET (Viimeiset 90 päivää):
-- Tarkista osakkeen tämänhetkinen konsensus-suositus (Osta/Pidä/Myy) ja keskimääräinen tavoitehinta.
-- Miten analyytikkojen tavoitehinnat, suositukset tai tulosennusteet ovat muuttuneet tai päivittyneet viimeisen 90 päivän aikana? Onko nähty merkittäviä nostoja tai laskuja (upgrades/downgrades)?
-
-4. RISTIINVERTAILU JA STRATEGINEN SYNTEESI:
-- Onko osakkeen teknisessä kuvassa (esim. vahva tekninen nousu tai laskutrendi), fundamenttitunnusluvuissa ja analyytikkojen arvioissa keskinäistä ristiriitaa?
-- Millainen on osakkeen nykyinen riski/tuotto-suhde (Risk/Reward) sijoittajan näkökulmasta?
-- Anna lopuksi selkeä strateginen näkemys: onko kyseessä kyseisen syklin mukaan tarkkailtava, ostettava vai varovaisuuteen kehoittava kohde.
-
---- 1 VUODEN HISTORIADATA (Pvm | Kurssi | SMA50 | SMA200 | RSI | MACD-linja | MACD-signaali) ---
-{daily_data_text}
---------------------------------------------------------------------------------------------------"""
-
-                # Toteutetaan suora leikepöytäkopiointi HTML/JS-painikkeella
-                escaped_text = gemini_prompt_text.replace("`", "\\`").replace("$", "\\$")
-                
-                clipboard_html = f"""
-                <div style="margin-bottom: 15px;">
-                    <button onclick="copyToClipboard()" style="
-                        background-color: #0969da;
-                        color: white;
-                        padding: 10px 20px;
-                        border: none;
-                        border-radius: 6px;
-                        font-size: 14px;
-                        font-weight: 600;
-                        cursor: pointer;
-                        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                    ">📋 Kopioi viimeisen vuoden kehitys & tunnusluvut (pääpaino 90pv)</button>
-                    <span id="copy-status" style="margin-left: 12px; font-size: 14px; color: #1f883d; font-weight: 600; display: none;">✓ Kopioitu leikepöydälle!</span>
-                </div>
-                <script>
-                function copyToClipboard() {{
-                    const text = `{escaped_text}`;
-                    navigator.clipboard.writeText(text).then(() => {{
-                        const status = document.getElementById('copy-status');
-                        status.style.display = 'inline';
-                        setTimeout(() => {{
-                            status.style.display = 'none';
-                        }}, 3000);
-                    }}).catch(err => {{
-                        alert('Kopiointi epäonnistui: ' + err);
-                    }});
-                }}
-                </script>
-                """
-                components.html(clipboard_html, height=60)
-                
-                st.markdown("---")
-
-                # 1. KYNTTILÄKAAVIO & LIUKUVAT KESKIARVOT
-                st.subheader(f"1. Kynttiläkaavio & Liukuvat keskiarvot: {tech_stock}")
-                fig_candlestick = go.Figure(data=[
-                    go.Candlestick(
-                        x=df.index,
-                        open=df['Open'], high=df['High'], low=df['Low'], close=df['Close'],
-                        name="Kynttilät"
-                    ),
-                    go.Scatter(x=df.index, y=df['SMA 50'], line=dict(color='red', width=1.5), name="SMA 50"),
-                    go.Scatter(x=df.index, y=df['SMA 200'], line=dict(color='dodgerblue', width=1.5), name="SMA 200")
-                ])
-                fig_candlestick.update_layout(template="plotly_white", height=450, xaxis_rangeslider_visible=False, margin=dict(l=10, r=10, t=10, b=10))
-                st.plotly_chart(fig_candlestick, use_container_width=True)
-
-                st.markdown("""
-                    <div class="info-box">
-                        <b>Miten tulkitaan:</b> Kynttiläkaavio näyttää päivittäiset avaus-, sulku-, ylä- ja alikurssit. Puna-vihreät kynttilät kertovat hintakehityksestä. 
-                        <b>SMA 50</b> ja <b>SMA 200</b> ovat liukuvia keskiarvoja. Kun kurssi on SMA 50:n yläpuolella, lyhyen aikavälin trendi on nouseva. 
-                        Kultainen risteys (Golden Cross, jossa SMA 50 alittaa/ylittää SMA 200:n) on tärkeä pitkän aikavälin signaali.
-                    </div>
-                """, unsafe_allow_html=True)
-
-                # 2. KAUPANKÄYNTIVOLYYMI
-                st.subheader("2. Kaupankäyntivolyymi")
-                fig_vol = go.Figure(data=[
-                    go.Bar(x=df.index, y=df['Volume'], marker_color='dimgray', name="Volyymi")
-                ])
-                fig_vol.update_layout(template="plotly_white", height=250, margin=dict(l=10, r=10, t=10, b=10))
-                st.plotly_chart(fig_vol, use_container_width=True)
-
-                st.markdown("""
-                    <div class="info-box">
-                        <b>Miten tulkitaan:</b> Volyymi kertoo, kuinka paljon osakkeita on vaihdettu kyseisenä päivänä. Korkea volyymi hintaliikkeen yhteydessä vahvistaa trendiä (ostajien tai myyjien vahva paine). Matala volyymi kertoo hiljaisemmasta markkinasta.
-                    </div>
-                """, unsafe_allow_html=True)
-
-                # 3. BOLLINGERIN NAUHAT
-                st.subheader("3. Bollingerin nauhat (20 pvl, 2σ)")
-                fig_bb = go.Figure(data=[
-                    go.Scatter(x=df.index, y=df['Bollinger Ylä'], line=dict(color='gray', width=1, dash='dash'), name="Yläreuna"),
-                    go.Scatter(x=df.index, y=df['Bollinger Keskiarvo'], line=dict(color='darkorange', width=1), name="Keskiarvo (SMA 20)"),
-                    go.Scatter(x=df.index, y=df['Bollinger Ala'], line=dict(color='gray', width=1, dash='dash'), name="Alareuna", fill='tonexty', fillcolor='rgba(255,165,0,0.08)'),
-                    go.Scatter(x=df.index, y=df['Close'], line=dict(color='black', width=1.5), name="Kurssi")
-                ])
-                fig_bb.update_layout(template="plotly_white", height=350, margin=dict(l=10, r=10, t=10, b=10))
-                st.plotly_chart(fig_bb, use_container_width=True)
-
-                st.markdown("""
-                    <div class="info-box">
-                        <b>Miten tulkitaan:</b> Bollingerin nauhat mittaavat kurssin volatiliteettia. Kun kurssi koskettaa yläreunaa, osake saattaa olla tilapäisesti yliostettu. Kun se koskettaa alareunaa, osake voi olla ylimyyty. Nauhojen kapeneminen (Squeeze) ennakoi usein voimakasta kurssiliikettä suuntaan tai toiseen.
-                    </div>
-                """, unsafe_allow_html=True)
-
-                # 4. MACD
-                st.subheader("4. MACD (Momentti)")
-                fig_macd = go.Figure(data=[
-                    go.Bar(x=df.index, y=df['MACD Hist'], marker_color='cadetblue', name="MACD Histogrammi"),
-                    go.Scatter(x=df.index, y=df['MACD'], line=dict(color='blue', width=1.5), name="MACD Linja"),
-                    go.Scatter(x=df.index, y=df['MACD Signal'], line=dict(color='deeppink', width=1.5), name="Signaalilinja")
-                ])
-                fig_macd.update_layout(template="plotly_white", height=300, margin=dict(l=10, r=10, t=10, b=10))
-                st.plotly_chart(fig_macd, use_container_width=True)
-
-                st.markdown("""
-                    <div class="info-box">
-                        <b>Miten tulkitaan:</b> MACD mittaa kahden liukuvan keskiarvon välistä eroa ja näyttää momentin muutoksia. Kun MACD-linja ylittää signaalilinjan ylöspäin, se on tyypillisesti osta-signaali (positiivinen momentti kiihtyy). Histogrammi näyttää eron suuruutta pylväinä.
-                    </div>
-                """, unsafe_allow_html=True)
-
-                # 5. RSI
-                st.subheader("5. RSI (14) - Yliostettu / Ylimyyty")
-                fig_rsi = go.Figure(data=[
-                    go.Scatter(x=df.index, y=df['RSI'], line=dict(color='royalblue', width=2), name="RSI"),
-                    go.Scatter(x=df.index, y=[70]*len(df), line=dict(color='red', width=1, dash='dot'), name="Yliostettu (70)"),
-                    go.Scatter(x=df.index, y=[30]*len(df), line=dict(color='green', width=1, dash='dot'), name="Ylimyyty (30)")
-                ])
-                fig_rsi.update_layout(template="plotly_white", height=300, yaxis=dict(range=[0, 100]), margin=dict(l=10, r=10, t=10, b=10))
-                st.plotly_chart(fig_rsi, use_container_width=True)
-
-                st.markdown("""
-                    <div class="info-box">
-                        <b>Miten tulkitaan:</b> RSI (Relative Strength Index) vaihtelee välillä 0–100. Arvo yli 70 viittaa siihen, että osake on yliostettu (mahdollinen kurssikorjaus alaspäin mahdollinen). Arvo alle 30 viittaa ylimyytyyn tilaan (mahdollinen pohjanmuodostus ja nousuvara).
-                    </div>
-                """, unsafe_allow_html=True)
-
-            else:
-                st.error("Syötetylle osakkeelle ei löytynyt riittävästi hintatietoja tai ticker on virheellinen.")
-        else:
-            st.warning("Historiatietoja ei ole riittävästi (vähintään 200 päivää) teknisten indikaattoreiden laskemiseen.")
-
-# Sivupalkki
-with st.sidebar:
-    st.header("Tietoa sovelluksesta")
-    st.write("Versio 8.1 - Zebran Salkku Google RSS uutisvahdilla.")
-    st.markdown("---")
-    st.write("**Pikalinkit lähteisiin:**")
-    st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
-    st.markdown("- [Inderes](https://www.inderes.fi)")
-    st.markdown("- [Seeking Alpha](https://seekingalpha.com)")
