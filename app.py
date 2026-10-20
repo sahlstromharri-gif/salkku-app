@@ -96,7 +96,7 @@ tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurss
 # VÄLILEHTI 1: UUTISVAHTI & GMAIL
 # ==========================================
 with tab_news:
-    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia uutisia (Yahoo Finance + Arvopaperi) sekä Nordnetin Aamukirjeitä.")
+    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia kansainvälisiä ja kotimaisia uutisia sekä Nordnetin Aamukirjeitä.")
 
     selected_stocks_news = st.multiselect(
         "Suodata uutisia osakkeiden mukaan (jätä tyhjäksi nähdäksesi kaikki):",
@@ -111,43 +111,6 @@ with tab_news:
     def fetch_all_news(symbols):
         news_list = []
         
-        # 1. Yahoo Finance -uutiset
-        for symbol in symbols:
-            try:
-                ticker = yf.Ticker(symbol)
-                raw_news = ticker.news
-                if raw_news:
-                    for item in raw_news:
-                        title = item.get("title") or item.get("content", {}).get("title", "Ei otsikkoa")
-                        url = item.get("link") or item.get("content", {}).get("clickThroughUrl", {}).get("url", "#")
-                        publisher = item.get("publisher") or item.get("content", {}).get("provider", {}).get("displayName", "Yahoo Finance")
-                        
-                        pub_time = "Tuore uutinen"
-                        for key in ["providerPublishTime", "pubDate", "date"]:
-                            val = item.get(key) or item.get("content", {}).get(key)
-                            if val:
-                                if isinstance(val, (int, float)):
-                                    try:
-                                        pub_time = datetime.fromtimestamp(val).strftime("%Y-%m-%d %H:%M")
-                                        break
-                                    except Exception:
-                                        pass
-                                elif isinstance(val, str) and len(val) >= 10:
-                                    pub_time = val[:10]
-                                    break
-                        
-                        news_list.append({
-                            "source_type": "Markkinat (Yahoo Finance)",
-                            "symbol": symbol,
-                            "title": title,
-                            "url": url,
-                            "publisher": publisher,
-                            "date": pub_time
-                        })
-            except Exception:
-                continue
-
-        # Hakutermit kotimaiselle medialle
         search_terms = {
             "CANATU.HE": "Canatu",
             "NOKIA.HE": "Nokia",
@@ -160,13 +123,31 @@ with tab_news:
             "VALMT.HE": "Valmet",
             "LDSK.HE": "LeadDesk",
             "NVDA": "Nvidia",
-            "MU": "Micron",
+            "MU": "Micron Technology",
             "ACLS": "Axcelis",
             "OUST": "Ouster",
-            "DX": "Dynex"
+            "DX": "Dynex Capital"
         }
 
-        # 2. Kotimainen lähde: Arvopaperi.fi
+        # 1. Kansainväliset uutiset Google RSS:n kautta
+        for symbol in symbols:
+            term = search_terms.get(symbol, symbol)
+            rss_url = f"https://news.google.com/rss/search?q={term}+stock&hl=en&gl=US&ceid=US:en"
+            try:
+                feed = feedparser.parse(rss_url)
+                for entry in feed.entries[:3]:
+                    news_list.append({
+                        "source_type": "Kansainväliset markkinat",
+                        "symbol": symbol,
+                        "title": entry.title,
+                        "url": entry.link,
+                        "publisher": "Google News / Global",
+                        "date": entry.published[:16] if hasattr(entry, "published") else "Tuore"
+                    })
+            except Exception:
+                continue
+
+        # 2. Kotimainen lähde: Arvopaperi.fi Google RSS:n kautta
         for symbol in symbols:
             term = search_terms.get(symbol, symbol)
             rss_url = f"https://news.google.com/rss/search?q={term}+site:arvopaperi.fi&hl=fi&gl=FI&ceid=FI:fi"
@@ -390,18 +371,6 @@ with tab_tech:
             pe_ratio = t_info.get('trailingPE', 'Ei saatavilla')
             fwd_pe = t_info.get('forwardPE', 'Ei saatavilla')
             ps_ratio = t_info.get('priceToSalesTrailing12Months', 'Ei saatavilla')
-            div_yield = t_info.get('dividendYield', None)
-            if div_yield:
-                div_yield = f"{round(div_yield * 100, 2)} %"
-            else:
-                div_yield = "Ei saatavilla"
-            
-            mkt_cap = t_info.get('marketCap', 'Ei saatavilla')
-            if isinstance(mkt_cap, (int, float)):
-                if mkt_cap > 1e9:
-                    mkt_cap = f"{round(mkt_cap / 1e9, 2)} Mrd"
-                else:
-                    mkt_cap = f"{round(mkt_cap / 1e6, 2)} M"
 
         if not df_full.empty and len(df_full) > 200:
             required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -467,24 +436,20 @@ with tab_tech:
                     trend_status = "Nouseva (SMA 50 yläpuolella)" if latest_price > latest_sma50 else "Laskeva (SMA 50 alapuolella)"
                     st.metric(label="Trendi (SMA 50)", value=f"{round(latest_sma50, 2)} {currency}", delta=trend_status)
 
-                # Näytetään tunnusluvut (P/E, Forward P/E, P/S jne.) omassa rivissään
+                # Näytetään tunnusluvut (P/E, Forward P/E, P/S) omassa rivissään
                 st.markdown("### 📈 Keskeiset tunnusluvut")
-                col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
+                col_f1, col_f2, col_f3 = st.columns(3)
                 with col_f1:
                     st.metric(label="P/E (historiallinen)", value=f"{round(pe_ratio, 2) if isinstance(pe_ratio, (int, float)) else pe_ratio}")
                 with col_f2:
                     st.metric(label="Forward P/E", value=f"{round(fwd_pe, 2) if isinstance(fwd_pe, (int, float)) else fwd_pe}")
                 with col_f3:
                     st.metric(label="P/S", value=f"{round(ps_ratio, 2) if isinstance(ps_ratio, (int, float)) else ps_ratio}")
-                with col_f4:
-                    st.metric(label="Osinkotuotto", value=div_yield)
-                with col_f5:
-                    st.metric(label="Markkina-arvo", value=mkt_cap)
 
                 st.markdown("---")
 
                 # ==========================================
-                # LAAJA GEMINI-PROMPTI (MUKANA MYÖS TUNNUSLUVUT)
+                # LAAJA GEMINI-PROMPTI (MUKANA TUNNUSLUVUT)
                 # ==========================================
                 st.markdown("### 🤖 Kopioi laaja teknis-fundamentaalinen analyysipaketti suoraan leikepöydälle")
 
@@ -496,8 +461,6 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
 - P/E (historiallinen): {pe_ratio}
 - Forward P/E: {fwd_pe}
 - P/S: {ps_ratio}
-- Osinkotuotto: {div_yield}
-- Markkina-arvo: {mkt_cap}
 Miten nämä tunnusluvut peilautuvat yhtiön arvostukseen ja sen toimialaan?
 
 2. TEKNINEN TRENDI JA MOMENTTI (Päivädata viimeiseltä vuodelta, pääpaino viimeisissä 90 pörssipäivässä):
@@ -647,7 +610,7 @@ Miten nämä tunnusluvut peilautuvat yhtiön arvostukseen ja sen toimialaan?
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 8.0 - Zebran Salkku tunnusluvuilla ja uutiskorjauksella.")
+    st.write("Versio 8.1 - Zebran Salkku Google RSS uutisvahdilla.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
