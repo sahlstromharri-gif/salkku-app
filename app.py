@@ -90,13 +90,13 @@ with col_title:
     st.markdown("<h1 style='padding-top: 25px;'>Zebran Salkku</h1>", unsafe_allow_html=True)
 
 # Luodaan kolme välilehteä
-tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurssit & Kehitys", "📊 Tekniset Indikaattorit"])
+tab_news, tab_charts, tab_tech = st.tabs(["📰 Uutisvahti & Gmail", "📈 Kurssit & Kehitys", "📊 Tekniset Indikaattorit & Tunnusluvut"])
 
 # ==========================================
 # VÄLILEHTI 1: UUTISVAHTI & GMAIL
 # ==========================================
 with tab_news:
-    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia uutisia, kotimaisia lähteitä sekä Nordnetin Aamukirjeitä.")
+    st.markdown("Seuraa suosikkiosakkeidesi tuoreimpia uutisia (Yahoo Finance + Arvopaperi) sekä Nordnetin Aamukirjeitä.")
 
     selected_stocks_news = st.multiselect(
         "Suodata uutisia osakkeiden mukaan (jätä tyhjäksi nähdäksesi kaikki):",
@@ -111,6 +111,7 @@ with tab_news:
     def fetch_all_news(symbols):
         news_list = []
         
+        # 1. Yahoo Finance -uutiset
         for symbol in symbols:
             try:
                 ticker = yf.Ticker(symbol)
@@ -136,7 +137,7 @@ with tab_news:
                                     break
                         
                         news_list.append({
-                            "source_type": "Markkinat (YF)",
+                            "source_type": "Markkinat (Yahoo Finance)",
                             "symbol": symbol,
                             "title": title,
                             "url": url,
@@ -146,6 +147,7 @@ with tab_news:
             except Exception:
                 continue
 
+        # Hakutermit kotimaiselle medialle
         search_terms = {
             "CANATU.HE": "Canatu",
             "NOKIA.HE": "Nokia",
@@ -164,9 +166,10 @@ with tab_news:
             "DX": "Dynex"
         }
 
+        # 2. Kotimainen lähde: Arvopaperi.fi
         for symbol in symbols:
             term = search_terms.get(symbol, symbol)
-            rss_url = f"https://news.google.com/rss/search?q={term}+site:arvopaperi.fi+OR+site:kauppalehti.fi&hl=fi&gl=FI&ceid=FI:fi"
+            rss_url = f"https://news.google.com/rss/search?q={term}+site:arvopaperi.fi&hl=fi&gl=FI&ceid=FI:fi"
             try:
                 feed = feedparser.parse(rss_url)
                 for entry in feed.entries[:3]:
@@ -175,12 +178,13 @@ with tab_news:
                         "symbol": symbol,
                         "title": entry.title,
                         "url": entry.link,
-                        "publisher": "Arvopaperi / Kauppalehti",
+                        "publisher": "Arvopaperi.fi",
                         "date": entry.published[:16] if hasattr(entry, "published") else "Kotimainen"
                     })
             except Exception:
                 continue
 
+        # 3. Gmail (Nordnet Aamukirjeet)
         SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
         creds = None
         
@@ -237,7 +241,7 @@ with tab_news:
 
         return pd.DataFrame(news_list)
 
-    with st.spinner("Haetaan tuoreimpia uutisia, kotimaisia lähteitä ja Nordnetin sähköposteja..."):
+    with st.spinner("Haetaan tuoreimpia uutisia, Arvopaperia ja Nordnetin sähköposteja..."):
         news_df = fetch_all_news(active_symbols_news)
 
     if not news_df.empty:
@@ -349,17 +353,15 @@ with tab_charts:
 
 
 # ==========================================
-# VÄLILEHTI 3: TEKNISET INDIKAATTORIT & GEMINI-PAKETTI
+# VÄLILEHTI 3: TEKNISET INDIKAATTORIT & TUNNUSLUVUT
 # ==========================================
 with tab_tech:
-    st.markdown("📊 **Tekninen analyysi: Kynttiläkaaviot, Indikaattorit & Vuositason Trendit**")
+    st.markdown("📊 **Tekninen analyysi, Tunnusluvut & Vuositason Trendit**")
     st.markdown("Valitse watchlistin osake tai syötä vapaa ticker (esim. MU, AAPL).")
 
-    # Luodaan valkolista + vaihtoehto "Muu osake..."
     tech_options = all_symbols + ["Muu osake (kirjoita ticker)..."]
-    selected_tech_option = st.selectbox("Valitse osake tekniseen analyysiin:", options=tech_options, key="tech_stock_select")
+    selected_tech_option = st.selectbox("Valitse osake tarkasteluun:", options=tech_options, key="tech_stock_select")
 
-    # Jos valittiin "Muu osake...", näytetään tekstilaatikko tickerille
     if selected_tech_option == "Muu osake (kirjoita ticker)...":
         custom_ticker = st.text_input("Syötä osakkeen ticker-symboli (esim. MU, AAPL, TSLA):", "").strip().upper()
         tech_stock = custom_ticker if custom_ticker else None
@@ -378,8 +380,28 @@ with tab_tech:
                 return df
             return pd.DataFrame()
 
-        with st.spinner(f"Ladataan kynttilädataa ja lasketaan indikaattoreita osakkeelle {tech_stock}..."):
+        with st.spinner(f"Ladataan kynttilädataa, tunnuslukuja ja lasketaan indikaattoreita osakkeelle {tech_stock}..."):
             df_full = fetch_full_tech_data(tech_stock)
+            
+            # Haetaan fundamenttitunnusluvut yfinance info-rajapinnasta
+            t_obj = yf.Ticker(tech_stock)
+            t_info = t_obj.info
+            
+            pe_ratio = t_info.get('trailingPE', 'Ei saatavilla')
+            fwd_pe = t_info.get('forwardPE', 'Ei saatavilla')
+            ps_ratio = t_info.get('priceToSalesTrailing12Months', 'Ei saatavilla')
+            div_yield = t_info.get('dividendYield', None)
+            if div_yield:
+                div_yield = f"{round(div_yield * 100, 2)} %"
+            else:
+                div_yield = "Ei saatavilla"
+            
+            mkt_cap = t_info.get('marketCap', 'Ei saatavilla')
+            if isinstance(mkt_cap, (int, float)):
+                if mkt_cap > 1e9:
+                    mkt_cap = f"{round(mkt_cap / 1e9, 2)} Mrd"
+                else:
+                    mkt_cap = f"{round(mkt_cap / 1e6, 2)} M"
 
         if not df_full.empty and len(df_full) > 200:
             required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
@@ -414,7 +436,7 @@ with tab_tech:
 
                 df = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
 
-                # Poimitaan viimeinen vuosi taulukkomuotoon Gemille
+                # Poimitaan vuositason historiapäivät Gemille
                 df_year_data = df_full[df_full.index >= pd.Timestamp(one_year_ago)].copy()
                 daily_data_lines = []
                 for idx, row in df_year_data.iterrows():
@@ -434,6 +456,7 @@ with tab_tech:
                 latest_rsi = float(df_full['RSI'].iloc[-1]) if not pd.isna(df_full['RSI'].iloc[-1]) else 50.0
                 latest_sma50 = float(df_full['SMA 50'].iloc[-1]) if not pd.isna(df_full['SMA 50'].iloc[-1]) else latest_price
 
+                # Näytetään metriikat (Kurssi, RSI, Trendi)
                 col_m1, col_m2, col_m3 = st.columns(3)
                 with col_m1:
                     st.metric(label="Viimeisin kurssi", value=f"{round(latest_price, 2)} {currency}")
@@ -444,10 +467,24 @@ with tab_tech:
                     trend_status = "Nouseva (SMA 50 yläpuolella)" if latest_price > latest_sma50 else "Laskeva (SMA 50 alapuolella)"
                     st.metric(label="Trendi (SMA 50)", value=f"{round(latest_sma50, 2)} {currency}", delta=trend_status)
 
+                # Näytetään tunnusluvut (P/E, Forward P/E, P/S jne.) omassa rivissään
+                st.markdown("### 📈 Keskeiset tunnusluvut")
+                col_f1, col_f2, col_f3, col_f4, col_f5 = st.columns(5)
+                with col_f1:
+                    st.metric(label="P/E (historiallinen)", value=f"{round(pe_ratio, 2) if isinstance(pe_ratio, (int, float)) else pe_ratio}")
+                with col_f2:
+                    st.metric(label="Forward P/E", value=f"{round(fwd_pe, 2) if isinstance(fwd_pe, (int, float)) else fwd_pe}")
+                with col_f3:
+                    st.metric(label="P/S", value=f"{round(ps_ratio, 2) if isinstance(ps_ratio, (int, float)) else ps_ratio}")
+                with col_f4:
+                    st.metric(label="Osinkotuotto", value=div_yield)
+                with col_f5:
+                    st.metric(label="Markkina-arvo", value=mkt_cap)
+
                 st.markdown("---")
 
                 # ==========================================
-                # LAAJA GEMINI-PROMPTI (VUOSIDATA + 90 PVL PÄÄPAINO)
+                # LAAJA GEMINI-PROMPTI (MUKANA MYÖS TUNNUSLUVUT)
                 # ==========================================
                 st.markdown("### 🤖 Kopioi laaja teknis-fundamentaalinen analyysipaketti suoraan leikepöydälle")
 
@@ -455,16 +492,24 @@ with tab_tech:
 
 Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilanteen, analyytikkojen konsensuksen ja tavoitehinnat. Vastaa suomeksi ja rakenna vastauksestasi selkeästi jäsennelty, kattava raportti seuraavien osa-alueiden pohjalta:
 
-1. TEKNINEN TRENDI JA MOMENTTI (Päivädata viimeiseltä vuodelta, pääpaino viimeisissä 90 pörssipäivässä):
+1. FUNDAMENTTITUNNUSLUVUT:
+- P/E (historiallinen): {pe_ratio}
+- Forward P/E: {fwd_pe}
+- P/S: {ps_ratio}
+- Osinkotuotto: {div_yield}
+- Markkina-arvo: {mkt_cap}
+Miten nämä tunnusluvut peilautuvat yhtiön arvostukseen ja sen toimialaan?
+
+2. TEKNINEN TRENDI JA MOMENTTI (Päivädata viimeiseltä vuodelta, pääpaino viimeisissä 90 pörssipäivässä):
 - Huom: Alla on data koko viimeisen vuoden ajalta. Käytä vuositason dataa ison kuvan havaitsemiseen (esim. merkittävät vuositason huiput/pohjat, pitkän aikavälin tukitasot ja vastustasot). Tee kuitenkin varsinainen syvällinen ja yksityiskohtainen momentti-, trendi- ja käännekohta-analyysi (SMA 50, SMA 200, RSI, MACD-linja vs. signaalilinja) **viimeisen 90 pörssipäivän** kehityksen pohjalta.
 - Huomioi nykykurssin sijainti suhteessa 1 vuoden tuki- ({support_level} {currency}) ja vastustasoihin ({resistance_level} {currency}).
 
-2. ANALYYTIKOIDEN KONSENSUS JA MUUTOKSET (Viimeiset 90 päivää):
+3. ANALYYTIKOIDEN KONSENSUS JA MUUTOKSET (Viimeiset 90 päivää):
 - Tarkista osakkeen tämänhetkinen konsensus-suositus (Osta/Pidä/Myy) ja keskimääräinen tavoitehinta.
 - Miten analyytikkojen tavoitehinnat, suositukset tai tulosennusteet ovat muuttuneet tai päivittyneet viimeisen 90 päivän aikana? Onko nähty merkittäviä nostoja tai laskuja (upgrades/downgrades)?
 
-3. RISTIINVERTAILU JA STRATEGINEN SYNTEESI:
-- Onko osakkeen teknisessä kuvassa (esim. vahva tekninen nousu tai laskutrendi) ja analyytikkojen arvioissa / konsensuksessa ristiriitaa? (Esimerkiksi: hinnoitteleeko markkina teknisesti eri tavalla kuin mitä analyytikkojen tavoitehinnat tai tuoreet uutiset antavat olettaa?)
+4. RISTIINVERTAILU JA STRATEGINEN SYNTEESI:
+- Onko osakkeen teknisessä kuvassa (esim. vahva tekninen nousu tai laskutrendi), fundamenttitunnusluvuissa ja analyytikkojen arvioissa keskinäistä ristiriitaa?
 - Millainen on osakkeen nykyinen riski/tuotto-suhde (Risk/Reward) sijoittajan näkökulmasta?
 - Anna lopuksi selkeä strateginen näkemys: onko kyseessä kyseisen syklin mukaan tarkkailtava, ostettava vai varovaisuuteen kehoittava kohde.
 
@@ -487,7 +532,7 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
                         font-weight: 600;
                         cursor: pointer;
                         box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-                    ">📋 Kopioi viimeisen vuoden kehitys (pääpaino 90pv)</button>
+                    ">📋 Kopioi viimeisen vuoden kehitys & tunnusluvut (pääpaino 90pv)</button>
                     <span id="copy-status" style="margin-left: 12px; font-size: 14px; color: #1f883d; font-weight: 600; display: none;">✓ Kopioitu leikepöydälle!</span>
                 </div>
                 <script>
@@ -602,7 +647,7 @@ Tarkistathan tarvittaessa omilla hakutyökaluillasi osakkeen tuoreimman tilantee
 # Sivupalkki
 with st.sidebar:
     st.header("Tietoa sovelluksesta")
-    st.write("Versio 7.9 - Zebran Salkku vapaalla ticker-haulla.")
+    st.write("Versio 8.0 - Zebran Salkku tunnusluvuilla ja uutiskorjauksella.")
     st.markdown("---")
     st.write("**Pikalinkit lähteisiin:**")
     st.markdown("- [Arvopaperi](https://www.arvopaperi.fi)")
